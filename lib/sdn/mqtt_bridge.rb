@@ -108,8 +108,8 @@ module SDN
             next unless message
             src = SDN::Message.print_address(message.src)
             # ignore the UAI Plus and ourselves
-            if src != '7F.7F.7F' && !SDN::Message::is_group_address?(message.src) && !(motor = @motors[src])
-              motor = publish_motor(src)
+            if src != '7F.7F.7F' && !SDN::Message::is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
+              motor = publish_motor(src.gsub('.', ''))
               puts "found new motor #{src}"
             end
 
@@ -173,7 +173,7 @@ module SDN
         if topic == "#{@base_topic}/discovery/discover/set" && value == "true"
           # trigger discovery
           @write_queue.push(SDN::Message::GetNodeAddr.new)
-        elsif (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{2}\.\h{2}\.\h{2})/(?<property>label|down|up|stop|positionpulses|positionpercent|ip|wink|reset|(?<speed_type>upspeed|downspeed|slowspeed)|uplimit|downlimit|direction|ip(?<ip>\d+)(?<ip_type>pulses|percent)|groups)/set$}))
+        elsif (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>label|down|up|stop|positionpulses|positionpercent|ip|wink|reset|(?<speed_type>upspeed|downspeed|slowspeed)|uplimit|downlimit|direction|ip(?<ip>\d+)(?<ip_type>pulses|percent)|groups)/set$}))
           addr = SDN::Message.parse_address(match[:addr])
           property = match[:property]
           # not homie compliant; allows linking the positionpercent property
@@ -182,7 +182,7 @@ module SDN
             property = value.downcase
             value = "true"
           end
-          motor = @motors[SDN::Message.print_address(addr)]
+          motor = @motors[SDN::Message.print_address(addr).gsub('.', '')]
           is_group = SDN::Message.is_group_address?(addr)
           follow_up = SDN::Message::GetMotorStatus.new(addr)
           message = case property
@@ -444,6 +444,7 @@ module SDN
     end
 
     def add_group(addr)
+      addr = addr.gsub('.', '')
       return if @groups.include?(addr)
 
       publish("#{addr}/$name", addr)
