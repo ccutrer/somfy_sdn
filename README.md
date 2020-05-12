@@ -26,7 +26,7 @@ Ruby installed):
 
 ```sh
 gem install somfy_sdn
-sudo curl https://github.com/ccutrer/somfy_sdn/raw/master/contrib/sdn_mqtt_bridge.service > /etc/systemd/system
+sudo curl https://github.com/ccutrer/somfy_sdn/raw/master/contrib/sdn_mqtt_bridge.service -L -o /etc/systemd/system/sdn_mqtt_bridge.service
 <modify the file to pass the correct URI to your MQTT server, and path to RS-485 device>
 sudo systemctl enable sdn_mqtt_bridge
 sudo systmctl start sdn_mqtt_bridge
