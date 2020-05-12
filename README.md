@@ -34,7 +34,8 @@ sudo systmctl start sdn_mqtt_bridge
 
 Once you have it connected and running, you'll like want to Publish `true` to
 `homie/sdn/discovery/discover/set` to kick off the discovery process and find
-existing motors.
+existing motors. When motors are commanded to move, it will automatically poll
+their status and position until they stop. This also works for groups.
 
 Note that several properties support additional value payloads than Homie would
 otherwise define in order to access additional features:
