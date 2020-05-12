@@ -1,0 +1,11 @@
+[Unit]
+Description=Somfy SDN MQTT Bridge
+
+[Service]
+User=cody
+ExecStart=/usr/local/bin/sdn_mqtt_bridge mqtt://localhost/ /dev/ttySomfy
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target
