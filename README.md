@@ -107,7 +107,7 @@ using an ethernet patch cable. You'll cut off the other end, and connect pins
 1 and 2 (white/orange and orange for a TIA-568-B configured cable) to + and -
 on your dongle:
 
-![Bus Connection](doc/busconnection.jpg)
+![Bus Connection](doc/bus.jpg)
 ![RS-485 Dongle](doc/rs485dongle.jpg)
 
 ## Related Projects
