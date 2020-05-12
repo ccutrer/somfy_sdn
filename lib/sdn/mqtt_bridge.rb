@@ -1,3 +1,7 @@
+require 'mqtt'
+require 'serialport'
+require 'set'
+
 module SDN
   Motor = Struct.new(:bridge,
                      :addr,
@@ -199,7 +203,7 @@ module SDN
               next unless SDN::Message::SetFactoryDefault::RESET.keys.include?(value.to_sym)
               SDN::Message::SetFactoryDefault.new(addr, value.to_sym)
             when 'positionpulses', 'positionpercent', 'ip'
-              SDN::Message::MoveTo.new(addr, property.to_sym, value.to_i)
+              SDN::Message::MoveTo.new(addr, property.sub('position', 'position_').to_sym, value.to_i)
             when 'direction'
               next if is_group
               follow_up = SDN::Message::GetMotorDirection.new(addr)
