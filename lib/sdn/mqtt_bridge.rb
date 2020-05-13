@@ -123,10 +123,24 @@ module SDN
       end
 
       read_thread = Thread.new do
+        buffer = ""
         loop do
           begin
-            message = SDN::Message.parse(@sdn)
-            next unless message
+            message, bytes_read = SDN::Message.parse(buffer.bytes)
+            unless message
+              begin
+                buffer.concat(@sdn.read_nonblock(1))
+                next
+              rescue IO::WaitReadable
+                if IO.select([@sdn], nil, nil, WAIT_TIME).nil?
+                  message = SDN::Message.parse(buffer.bytes, allow_truncated_checksum: true)
+                  buffer = ""
+                end
+              end
+              next
+            end
+            # discard how much we read
+            buffer = buffer[bytes_read..-1]
 
             src = SDN::Message.print_address(message.src)
             # ignore the UAI Plus and ourselves
