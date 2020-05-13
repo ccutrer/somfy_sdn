@@ -32,6 +32,10 @@ sudo systemctl enable sdn_mqtt_bridge
 sudo systmctl start sdn_mqtt_bridge
 ```
 
+Serial ports over the network are also supported. Just give a URI like
+tcp://192.168.1.10:2217/ instead of a local device. Be sure to set up your
+server (like ser2net) to use 4800 baud, ODD.
+
 Once you have it connected and running, you'll like want to Publish `true` to
 `homie/sdn/discovery/discover/set` to kick off the discovery process and find
 existing motors. When motors are commanded to move, it will automatically poll

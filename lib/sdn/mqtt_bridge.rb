@@ -1,5 +1,7 @@
 require 'mqtt'
 require 'serialport'
+require 'socket'
+require 'uri'
 require 'set'
 
 module SDN
@@ -92,18 +94,24 @@ module SDN
   end
 
   class MQTTBridge
-    def initialize(mqtt_uri, serialport, device_id: "somfy", base_topic: "homie")
+    def initialize(mqtt_uri, port, device_id: "somfy", base_topic: "homie")
       @base_topic = "#{base_topic}/#{device_id}"
       @mqtt = MQTT::Client.new(mqtt_uri)
       @mqtt.set_will("#{@base_topic}/$state", "lost", true)
       @mqtt.connect
+
       @motors = {}
       @groups = Set.new
       @write_queue = Queue.new
 
       publish_basic_attributes
 
-      @sdn = SerialPort.open(serialport, "baud" => 4800, "parity" => SerialPort::ODD)
+      uri = URI.parse(port)
+      if uri.scheme == "tcp"
+        @sdn = TCPSocket.new(uri.host, uri.port)
+      else
+        @sdn = SerialPort.open(serialport, "baud" => 4800, "parity" => SerialPort::ODD)
+      end
 
       read_thread = Thread.new do
         loop do
