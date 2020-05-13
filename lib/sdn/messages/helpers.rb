@@ -43,7 +43,7 @@ module SDN
       end
 
       def checksum(bytes)
-        result = bytes.sum
+        result = bytes.inject(&:+)
         [result >> 8, result & 0xff]
       end
     end

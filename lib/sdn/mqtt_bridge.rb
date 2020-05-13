@@ -162,13 +162,19 @@ module SDN
       end
 
       write_thread = Thread.new do
-        loop do
-          message = @write_queue.pop
-          puts "writing #{message.inspect}"
-          @sdn.write(message.serialize)
-          # give more response time to a discovery message
-          sleep 5 if (message.is_a?(SDN::Message::GetNodeAddr) && message.dest == [0xff, 0xff, 0xff])
-          sleep 0.1
+        begin
+          loop do
+            message = @write_queue.pop
+            puts "writing #{message.inspect}"
+            @sdn.write(message.serialize)
+            @sdn.flush
+            # give more response time to a discovery message
+            sleep 5 if (message.is_a?(SDN::Message::GetNodeAddr) && message.dest == [0xff, 0xff, 0xff])
+            sleep 0.1
+          end
+        rescue => e
+          puts "failure writing: #{e}"
+          exit 1
         end
       end
 
