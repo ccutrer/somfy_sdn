@@ -119,7 +119,7 @@ module SDN
       if uri.scheme == "tcp"
         @sdn = TCPSocket.new(uri.host, uri.port)
       else
-        @sdn = SerialPort.open(serialport, "baud" => 4800, "parity" => SerialPort::ODD)
+        @sdn = SerialPort.open(port, "baud" => 4800, "parity" => SerialPort::ODD)
       end
 
       read_thread = Thread.new do
