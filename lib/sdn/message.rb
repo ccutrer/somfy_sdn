@@ -5,7 +5,7 @@ module SDN
 
   class Message  
     class << self
-      def parse(data, allow_truncated_checksum: false)
+      def parse(data)
         offset = -1
         msg = length = ack_requested = message_class = nil
         # we loop here scanning for a valid message
@@ -33,6 +33,7 @@ module SDN
           break
         end
 
+        puts "discarding invalid data prior to message #{data[0...offset].map { |b| '%02x' % b }.join(' ')}" unless offset == 0
         puts "read #{data.slice(offset, length).map { |b| '%02x' % b }.join(' ')}"
 
         reserved = to_number(data[offset + 2])

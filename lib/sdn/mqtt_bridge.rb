@@ -132,8 +132,10 @@ module SDN
                 buffer.concat(@sdn.read_nonblock(1))
                 next
               rescue IO::WaitReadable
-                if IO.select([@sdn], nil, nil, WAIT_TIME).nil?
-                  message = SDN::Message.parse(buffer.bytes, allow_truncated_checksum: true)
+                wait = buffer.empty? ? nil : WAIT_TIME
+                if IO.select([@sdn], nil, nil, wait).nil?
+                  # timed out; just discard everything
+                  puts "timed out reading; discarding buffer: #{buffer.unpack('H*').first}"
                   buffer = ""
                 end
               end
@@ -529,8 +531,7 @@ module SDN
 
       sdn_addr = SDN::Message.parse_address(addr)
       @mutex.synchronize do
-        # these messages are often corrupt; just don't bother for now.
-        #@request_queue.push(SDN::Message::GetNodeLabel.new(sdn_addr))
+        @request_queue.push(SDN::Message::GetNodeLabel.new(sdn_addr))
         @request_queue.push(SDN::Message::GetMotorStatus.new(sdn_addr))
         @request_queue.push(SDN::Message::GetMotorLimits.new(sdn_addr))
         @request_queue.push(SDN::Message::GetMotorDirection.new(sdn_addr))

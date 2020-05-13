@@ -6,14 +6,6 @@ protocol, and it has been further reverse engineered by various individuals,
 and by capturing traffic from a Somfy UAI+, and referencing the output of the
 Somfy SDN Frame Builder tool.
 
-One caveat is for getting and setting node labels, there appears to be bugs
-in the UAI+ and Sonesse 30 motors that can truncate the checksum in certain
-conditions when the sum of the bytes is greater than 0x10ff. Unfortunately
-they seem to be _different_ bugs in UAI+ and the motors. Therefore I've
-given up on figuring out exact ranges and inferring who is sending the
-message, and just don't automatically query node labels. You can still set
-labels just fine via MQTT.
-
 ## MQTT/Homie Bridge
 
 An MQTT Bridge is provided to allow easy integration with other systems. You
