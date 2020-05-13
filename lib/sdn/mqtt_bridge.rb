@@ -94,6 +94,9 @@ module SDN
   end
 
   class MQTTBridge
+    WAIT_TIME = 0.25
+    BROADCAST_WAIT = 5.0
+
     def initialize(mqtt_uri, port, device_id: "somfy", base_topic: "homie")
       @base_topic = "#{base_topic}/#{device_id}"
       @mqtt = MQTT::Client.new(mqtt_uri)
@@ -102,7 +105,13 @@ module SDN
 
       @motors = {}
       @groups = Set.new
-      @write_queue = Queue.new
+
+      @mutex = Mutex.new
+      @cond = ConditionVariable.new
+      @command_queue = []
+      @request_queue = []
+      @response_pending = false
+      @broadcast_pending = false
 
       publish_basic_attributes
 
@@ -118,6 +127,7 @@ module SDN
           begin
             message = SDN::Message.parse(@sdn)
             next unless message
+
             src = SDN::Message.print_address(message.src)
             # ignore the UAI Plus and ourselves
             if src != '7F.7F.7F' && !SDN::Message::is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
@@ -126,6 +136,7 @@ module SDN
             end
 
             puts "read #{message.inspect}"
+            follow_ups = []
             case message
             when SDN::Message::PostNodeLabel
               if (motor.publish(:label, message.label))
@@ -137,10 +148,10 @@ module SDN
               motor.publish(:ip, message.ip)
             when SDN::Message::PostMotorStatus
               if message.state == :running || motor.state == :running
-                @write_queue.push(SDN::Message::GetMotorStatus.new(message.src))
+                follow_ups << SDN::Message::GetMotorStatus.new(message.src)
               end
               # this will do one more position request after it stopped
-              @write_queue.push(SDN::Message::GetMotorPosition.new(message.src))
+              follow_ups << SDN::Message::GetMotorPosition.new(message.src)
               motor.publish(:state, message.state)
               motor.publish(:last_direction, message.last_direction)
               motor.publish(:last_action_source, message.last_action_source)
@@ -161,6 +172,12 @@ module SDN
               motor.add_group(message.group_index, message.group_address)
             end
 
+            @mutex.synchronize do
+              signal = @response_pending || !follow_ups.empty?
+              @response_pending = @broadcast_pending
+              @request_queue.concat(follow_ups)
+              @cond.signal if signal
+            end
           rescue SDN::MalformedMessage => e
             puts "ignoring malformed message: #{e}" unless e.to_s =~ /issing data/
           rescue => e
@@ -172,13 +189,43 @@ module SDN
       write_thread = Thread.new do
         begin
           loop do
-            message = @write_queue.pop
+            message = nil
+            @mutex.synchronize do
+              # got woken up early by another command getting queued; spin
+              if @response_pending
+                while @response_pending
+                  remaining_wait = @response_pending - Time.now.to_f
+                  if remaining_wait < 0
+                    puts "timed out waiting on response"
+                    @response_pending = nil
+                    @broadcast_pending = nil
+                  else
+                    @cond.wait(@mutex, remaining_wait)
+                  end
+                end
+              else
+                sleep 0.1
+              end
+
+              message = @command_queue.shift
+              unless message
+                message = @request_queue.shift
+                if message
+                  @response_pending = Time.now.to_f + WAIT_TIME
+                  if message.dest == [0xff, 0xff, 0xff]
+                    @broadcast_pending = Time.now.to_f + BROADCAST_WAIT
+                  end    
+                end
+              end
+
+              # spin until there is a message
+              @cond.wait(@mutex) unless message
+            end
+            next unless message
+
             puts "writing #{message.inspect}"
             @sdn.write(message.serialize)
             @sdn.flush
-            # give more response time to a discovery message
-            sleep 5 if (message.is_a?(SDN::Message::GetNodeAddr) && message.dest == [0xff, 0xff, 0xff])
-            sleep 0.1
           end
         rescue => e
           puts "failure writing: #{e}"
@@ -190,7 +237,10 @@ module SDN
         puts "got #{value.inspect} at #{topic}"
         if topic == "#{@base_topic}/discovery/discover/set" && value == "true"
           # trigger discovery
-          @write_queue.push(SDN::Message::GetNodeAddr.new)
+          @mutex.synchronize do
+            @request_queue.push(SDN::Message::GetNodeAddr.new)
+            @cond.signal
+          end
         elsif (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>label|down|up|stop|positionpulses|positionpercent|ip|wink|reset|(?<speed_type>upspeed|downspeed|slowspeed)|uplimit|downlimit|direction|ip(?<ip>\d+)(?<ip_type>pulses|percent)|groups)/set$}))
           addr = SDN::Message.parse_address(match[:addr])
           property = match[:property]
@@ -263,13 +313,18 @@ module SDN
               next if is_group
               next unless motor
               messages = motor.set_groups(value)
-              messages.each { |m| @write_queue.push(m) }
+              @mutex.synchronize do
+                messages.each { |m| @command_queue.push(m) }
+                @cond.signal
+              end
               nil
           end
           if message
-            @write_queue.push(message)
-            next if follow_up.is_a?(SDN::Message::GetMotorStatus) && motor&.state == :running
-            @write_queue.push(follow_up)
+            @mutex.synchronize do
+              @command_queue.push(message)
+              @request_queue.push(follow_up) unless @request_queue.include?(follow_up)
+              @cond.signal
+            end
           end
         end
       end
@@ -281,6 +336,16 @@ module SDN
 
     def subscribe(topic)
       @mqtt.subscribe("#{@base_topic}/#{topic}")
+    end
+
+    def enqueue(message, queue = :command)
+      @mutex.synchronize do
+        queue = instance_variable_get(:"#{@queue}_queue")
+        unless queue.include?(message)
+          queue.push(message)
+          @cond.signal
+        end
+      end
     end
 
     def publish_basic_attributes
@@ -449,14 +514,18 @@ module SDN
       publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.to_a).join(","))
 
       sdn_addr = SDN::Message.parse_address(addr)
-      # these messages are often corrupt; just don't bother for now.
-      #@write_queue.push(SDN::Message::GetNodeLabel.new(sdn_addr))
-      @write_queue.push(SDN::Message::GetMotorStatus.new(sdn_addr))
-      @write_queue.push(SDN::Message::GetMotorLimits.new(sdn_addr))
-      @write_queue.push(SDN::Message::GetMotorDirection.new(sdn_addr))
-      @write_queue.push(SDN::Message::GetMotorRollingSpeed.new(sdn_addr))
-      (1..16).each { |ip| @write_queue.push(SDN::Message::GetMotorIP.new(sdn_addr, ip)) }
-      (0...16).each { |g| @write_queue.push(SDN::Message::GetGroupAddr.new(sdn_addr, g)) }
+      @mutex.synchronize do
+        # these messages are often corrupt; just don't bother for now.
+        #@request_queue.push(SDN::Message::GetNodeLabel.new(sdn_addr))
+        @request_queue.push(SDN::Message::GetMotorStatus.new(sdn_addr))
+        @request_queue.push(SDN::Message::GetMotorLimits.new(sdn_addr))
+        @request_queue.push(SDN::Message::GetMotorDirection.new(sdn_addr))
+        @request_queue.push(SDN::Message::GetMotorRollingSpeed.new(sdn_addr))
+        (1..16).each { |ip| @request_queue.push(SDN::Message::GetMotorIP.new(sdn_addr, ip)) }
+        (0...16).each { |g| @request_queue.push(SDN::Message::GetGroupAddr.new(sdn_addr, g)) }
+
+        @cond.signal
+      end
 
       motor
     end
