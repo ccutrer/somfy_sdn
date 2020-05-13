@@ -194,6 +194,9 @@ module SDN
               @request_queue.concat(follow_ups)
               @cond.signal if signal
             end
+          rescue EOFError
+            puts "EOF reading"
+            exit 2
           rescue SDN::MalformedMessage => e
             puts "ignoring malformed message: #{e}" unless e.to_s =~ /issing data/
           rescue => e
