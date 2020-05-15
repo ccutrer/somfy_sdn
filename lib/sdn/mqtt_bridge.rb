@@ -1,6 +1,4 @@
 require 'mqtt'
-require 'serialport'
-require 'socket'
 require 'uri'
 require 'set'
 
@@ -117,8 +115,16 @@ module SDN
 
       uri = URI.parse(port)
       if uri.scheme == "tcp"
+        require 'socket'
         @sdn = TCPSocket.new(uri.host, uri.port)
+      elsif uri.scheme == "telnet" || uri.scheme == "rfc2217"
+        require 'net/telnet/rfc2217'
+        @sdn = Net::Telnet::RFC2217.new('Host' => uri.host,
+         'Port' => uri.port || 23,
+         'baud' => 4800,
+         'parity' => Net::Telnet::RFC2217::ODD)
       else
+        require 'serialport'
         @sdn = SerialPort.open(port, "baud" => 4800, "parity" => SerialPort::ODD)
       end
 
@@ -129,11 +135,11 @@ module SDN
             message, bytes_read = SDN::Message.parse(buffer.bytes)
             unless message
               begin
-                buffer.concat(@sdn.read_nonblock(1))
+                buffer.concat(@sdn.read_nonblock(64 * 1024))
                 next
               rescue IO::WaitReadable
                 wait = buffer.empty? ? nil : WAIT_TIME
-                if IO.select([@sdn], nil, nil, wait).nil?
+                if @sdn.wait_readable(wait).nil?
                   # timed out; just discard everything
                   puts "timed out reading; discarding buffer: #{buffer.unpack('H*').first}"
                   buffer = ""
