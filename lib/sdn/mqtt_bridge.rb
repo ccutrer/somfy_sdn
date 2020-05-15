@@ -3,6 +3,28 @@ require 'uri'
 require 'set'
 
 module SDN
+  Group = Struct.new(:bridge, :addr, :positionpercent, :state) do
+    def initialize(*)
+      members.each { |k| self[k] = :nil }
+      super
+    end
+
+    def publish(attribute, value)
+      if self[attribute] != value
+        bridge.publish("#{addr}/#{attribute}", value.to_s)
+        self[attribute] = value
+      end
+    end
+
+    def printed_addr
+      Message.print_address(Message.parse_address(addr))
+    end
+
+    def motors
+      bridge.motors.select { |addr, motor| motor.groups_string.include?(printed_addr) }.values
+    end
+  end
+
   Motor = Struct.new(:bridge,
                      :addr,
                      :label,
@@ -89,11 +111,17 @@ module SDN
      def groups_string
        @groups.compact.map { |g| SDN::Message.print_address(g) }.sort.uniq.join(',')
      end
-  end
+
+     def group_objects
+       groups_string.split(',').map { |addr| bridge.groups[addr.gsub('.', '')] }
+     end
+    end
 
   class MQTTBridge
     WAIT_TIME = 0.25
     BROADCAST_WAIT = 5.0
+
+    attr_reader :motors, :groups
 
     def initialize(mqtt_uri, port, device_id: "somfy", base_topic: "homie")
       @base_topic = "#{base_topic}/#{device_id}"
@@ -102,7 +130,7 @@ module SDN
       @mqtt.connect
 
       @motors = {}
-      @groups = Set.new
+      @groups = {}
 
       @mutex = Mutex.new
       @cond = ConditionVariable.new
@@ -168,6 +196,17 @@ module SDN
               motor.publish(:positionpercent, message.position_percent)
               motor.publish(:positionpulses, message.position_pulses)
               motor.publish(:ip, message.ip)
+              motor.group_objects.each do |group|
+                positions = group.motors.map(&:positionpercent)
+                position = nil
+                # calculate an average, but only if we know a position for
+                # every shade
+                if !positions.include?(:nil) && !positions.include?(nil)
+                  position = positions.inject(&:+) / positions.length
+                end
+
+                group.publish(:positionpercent, position)
+              end
             when SDN::Message::PostMotorStatus
               if message.state == :running || motor.state == :running
                 follow_ups << SDN::Message::GetMotorStatus.new(message.src)
@@ -178,6 +217,11 @@ module SDN
               motor.publish(:last_direction, message.last_direction)
               motor.publish(:last_action_source, message.last_action_source)
               motor.publish(:last_action_cause, message.last_action_cause)
+              motor.group_objects.each do |group|
+                states = group.motors.map(&:state).uniq
+                state = states.length == 1 ? states.first : 'mixed'
+                group.publish(:state, state)
+              end
             when SDN::Message::PostMotorLimits
               motor.publish(:uplimit, message.up_limit)
               motor.publish(:downlimit, message.down_limit)
@@ -536,7 +580,7 @@ module SDN
 
       motor = Motor.new(self, addr)
       @motors[addr] = motor
-      publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.to_a).join(","))
+      publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.keys.sort.to_a).join(","))
 
       sdn_addr = SDN::Message.parse_address(addr)
       @mutex.synchronize do
@@ -556,7 +600,7 @@ module SDN
 
     def add_group(addr)
       addr = addr.gsub('.', '')
-      return if @groups.include?(addr)
+      return if @groups.key?(addr)
 
       publish("#{addr}/$name", addr)
       publish("#{addr}/$type", "Shade Group")
@@ -599,7 +643,11 @@ module SDN
       publish("#{addr}/wink/$settable", "true")
       publish("#{addr}/wink/$retained", "false")
 
-      @groups << addr
+      publish("#{addr}/state/$name", "State of the motors; only set if all motors are in the same state")
+      publish("#{addr}/state/$datatype", "enum")
+      publish("#{addr}/state/$format", SDN::Message::PostMotorStatus::STATE.keys.join(','))
+
+      @groups[addr] = Group.new(self, addr)
       publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.to_a).join(","))
     end
   end
