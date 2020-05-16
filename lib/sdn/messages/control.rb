@@ -27,17 +27,17 @@ module SDN
      end
 
      def direction=(value)
-        raise ArgumentError, "direction must be one of :down, :up, or :cancel" unless DIRECTION.keys.include?(value)
+        raise ArgumentError, "direction must be one of :down, :up, or :cancel (#{value})" unless DIRECTION.keys.include?(value)
         @direction = value
      end
 
      def duration=(value)
-        raise ArgumentError, "duration must be in range 0x0a to 0xff" unless value || value >= 0x0a && value <= 0xff
+        raise ArgumentError, "duration must be in range 0x0a to 0xff (#{value})" unless value && value >= 0x0a && value <= 0xff
         @duration = value
      end
 
      def speed=(value)
-        raise ArgumentError, "speed must be one of :up, :down, or :slow" unless SPEED.keys.include?(value)
+        raise ArgumentError, "speed must be one of :up, :down, or :slow (#{value})" unless SPEED.keys.include?(value)
         @speed = speed
       end
 
