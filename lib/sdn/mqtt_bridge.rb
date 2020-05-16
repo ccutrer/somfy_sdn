@@ -161,6 +161,8 @@ module SDN
         loop do
           begin
             message, bytes_read = SDN::Message.parse(buffer.bytes)
+            # discard how much we read
+            buffer = buffer[bytes_read..-1]
             unless message
               begin
                 buffer.concat(@sdn.read_nonblock(64 * 1024))
@@ -175,8 +177,6 @@ module SDN
               end
               next
             end
-            # discard how much we read
-            buffer = buffer[bytes_read..-1]
 
             src = SDN::Message.print_address(message.src)
             # ignore the UAI Plus and ourselves
@@ -232,7 +232,7 @@ module SDN
               motor.publish(:downspeed, message.down_speed)
               motor.publish(:slowspeed, message.slow_speed)
             when SDN::Message::PostMotorIP
-              motor.publish(:"ip#{message.ip}pulses", message.position_pulses) 
+              motor.publish(:"ip#{message.ip}pulses", message.position_pulses)
               motor.publish(:"ip#{message.ip}percent", message.position_percent)
             when SDN::Message::PostGroupAddr
               motor.add_group(message.group_index, message.group_address)
@@ -283,7 +283,7 @@ module SDN
                   @response_pending = Time.now.to_f + WAIT_TIME
                   if message.dest == [0xff, 0xff, 0xff]
                     @broadcast_pending = Time.now.to_f + BROADCAST_WAIT
-                  end    
+                  end
                 end
               end
 
@@ -619,7 +619,7 @@ module SDN
       publish("#{addr}/stop/$name", "Cancel adjustments")
       publish("#{addr}/stop/$datatype", "boolean")
       publish("#{addr}/stop/$settable", "true")
-      publish("#{addr}/stop/$retained", "false")      
+      publish("#{addr}/stop/$retained", "false")
 
       publish("#{addr}/positionpulses/$name", "Position from up limit (in pulses)")
       publish("#{addr}/positionpulses/$datatype", "integer")

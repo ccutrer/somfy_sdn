@@ -3,7 +3,7 @@ require 'sdn/messages/helpers'
 module SDN
   class MalformedMessage < RuntimeError; end
 
-  class Message  
+  class Message
     class << self
       def parse(data)
         offset = -1
@@ -11,7 +11,7 @@ module SDN
         # we loop here scanning for a valid message
         loop do
           offset += 1
-          return nil if data.length - offset < 11
+          return [nil, 0] if data.length - offset < 11
           msg = to_number(data[offset])
           length = to_number(data[offset + 1])
           ack_requested = length & 0x80 == 0x80
@@ -39,9 +39,14 @@ module SDN
         reserved = to_number(data[offset + 2])
         src = transform_param(data.slice(offset + 3, 3))
         dest = transform_param(data.slice(offset + 6, 3))
-        result = message_class.new(reserved: reserved, ack_requested: ack_requested, src: src, dest: dest)
-        result.parse(data.slice(offset + 9, length - 11))
-        result.msg = msg if message_class == UnknownMessage
+        begin
+          result = message_class.new(reserved: reserved, ack_requested: ack_requested, src: src, dest: dest)
+          result.parse(data.slice(offset + 9, length - 11))
+          result.msg = msg if message_class == UnknownMessage
+        rescue ArgumentError => e
+          puts "discarding illegal message #{e}"
+          result = nil
+        end
         [result, offset + length]
       end
     end
