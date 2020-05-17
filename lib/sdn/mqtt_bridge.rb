@@ -286,7 +286,7 @@ module SDN
                 message = @request_queue.shift
                 if message
                   @response_pending = Time.now.to_f + WAIT_TIME
-                  if message.dest == [0xff, 0xff, 0xff]
+                  if message.dest == BROADCAST_ADDRESS || SDN::Message::is_group_address?(message.src)
                     @broadcast_pending = Time.now.to_f + BROADCAST_WAIT
                   end
                 end
@@ -315,7 +315,7 @@ module SDN
             @request_queue.push(SDN::Message::GetNodeAddr.new)
             @cond.signal
           end
-        elsif (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>label|down|up|stop|positionpulses|positionpercent|ip|wink|reset|(?<speed_type>upspeed|downspeed|slowspeed)|uplimit|downlimit|direction|ip(?<ip>\d+)(?<ip_type>pulses|percent)|groups)/set$}))
+        elsif (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>discover|label|down|up|stop|positionpulses|positionpercent|ip|wink|reset|(?<speed_type>upspeed|downspeed|slowspeed)|uplimit|downlimit|direction|ip(?<ip>\d+)(?<ip_type>pulses|percent)|groups)/set$}))
           addr = SDN::Message.parse_address(match[:addr])
           property = match[:property]
           # not homie compliant; allows linking the positionpercent property
@@ -330,6 +330,9 @@ module SDN
           group = @groups[mqtt_addr]
           follow_up = SDN::Message::GetMotorStatus.new(addr)
           message = case property
+            when 'discover'
+              follow_up = nil
+              SDN::Message::GetNodeAddr.new(addr) if value == "true"
             when 'label'
               follow_up = SDN::Message::GetNodeLabel.new(addr)
               SDN::Message::SetNodeLabel.new(addr, value) unless is_group
@@ -439,7 +442,7 @@ module SDN
       publish("discovery/discover/$settable", "true")
       publish("discovery/discover/$retained", "false")
 
-      subscribe("discovery/discover/set")
+      subscribe("+/discover/set")
       subscribe("+/label/set")
       subscribe("+/down/set")
       subscribe("+/up/set")
@@ -467,7 +470,12 @@ module SDN
     def publish_motor(addr)
       publish("#{addr}/$name", addr)
       publish("#{addr}/$type", "Sonesse 30 Motor")
-      publish("#{addr}/$properties", "label,down,up,stop,positionpulses,positionpercent,ip,wink,reset,state,last_direction,last_action_source,last_action_cause,uplimit,downlimit,direction,upspeed,downspeed,slowspeed,#{(1..16).map { |ip| "ip#{ip}pulses,ip#{ip}percent" }.join(',')},groups")
+      publish("#{addr}/$properties", "discover,label,down,up,stop,positionpulses,positionpercent,ip,wink,reset,state,last_direction,last_action_source,last_action_cause,uplimit,downlimit,direction,upspeed,downspeed,slowspeed,#{(1..16).map { |ip| "ip#{ip}pulses,ip#{ip}percent" }.join(',')},groups")
+
+      publish("#{addr}/discover/$name", "Trigger Motor Discovery")
+      publish("#{addr}/discover/$datatype", "boolean")
+      publish("#{addr}/discover/$settable", "true")
+      publish("#{addr}/discover/$retained", "false")
 
       publish("#{addr}/label/$name", "Node label")
       publish("#{addr}/label/$datatype", "string")
@@ -587,7 +595,7 @@ module SDN
 
       motor = Motor.new(self, addr)
       @motors[addr] = motor
-      publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.keys.sort.to_a).join(","))
+      publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.keys.sort).join(","))
 
       sdn_addr = SDN::Message.parse_address(addr)
       @mutex.synchronize do
@@ -612,7 +620,12 @@ module SDN
 
       publish("#{addr}/$name", addr)
       publish("#{addr}/$type", "Shade Group")
-      publish("#{addr}/$properties", "down,up,stop,positionpulses,positionpercent,ip,wink,reset,state,motors")
+      publish("#{addr}/$properties", "discover,down,up,stop,positionpulses,positionpercent,ip,wink,reset,state,motors")
+
+      publish("#{addr}/discover/$name", "Trigger Motor Discovery")
+      publish("#{addr}/discover/$datatype", "boolean")
+      publish("#{addr}/discover/$settable", "true")
+      publish("#{addr}/discover/$retained", "false")
 
       publish("#{addr}/down/$name", "Move in down direction")
       publish("#{addr}/down/$datatype", "boolean")
@@ -659,7 +672,7 @@ module SDN
       publish("#{addr}/motors/$datatype", "string")
 
       group = @groups[addr] = Group.new(self, addr)
-      publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.to_a).join(","))
+      publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.keys.sort).join(","))
       group
     end
   end
