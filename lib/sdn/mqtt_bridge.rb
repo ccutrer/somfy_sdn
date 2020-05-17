@@ -3,7 +3,7 @@ require 'uri'
 require 'set'
 
 module SDN
-  Group = Struct.new(:bridge, :addr, :positionpercent, :state) do
+  Group = Struct.new(:bridge, :addr, :positionpercent, :state, :motors) do
     def initialize(*)
       members.each { |k| self[k] = :nil }
       super
@@ -20,8 +20,12 @@ module SDN
       Message.print_address(Message.parse_address(addr))
     end
 
-    def motors
+    def motor_objects
       bridge.motors.select { |addr, motor| motor.groups_string.include?(printed_addr) }.values
+    end
+
+    def motors_string
+      motor_objects.map { |m| SDN::Message.print_address(SDN::Message.parse_address(m.addr)) }.sort.join(',')
     end
   end
 
@@ -74,48 +78,49 @@ module SDN
                      :ip16pulses,
                      :ip16percent,
                      :groups) do
-     def initialize(*)
-       members.each { |k| self[k] = :nil }
-       @groups = [].fill(nil, 0, 16)
-       super
-     end
-
-     def publish(attribute, value)
-       if self[attribute] != value
-         bridge.publish("#{addr}/#{attribute}", value.to_s)
-         self[attribute] = value
-       end
-     end
-
-     def add_group(index, address)
-       bridge.add_group(SDN::Message.print_address(address)) if address
-       @groups[index] = address
-       publish(:groups, groups_string)
-     end
-
-     def set_groups(groups)
-       return unless groups =~ /^(?:\h{2}[:.]?\h{2}[:.]?\h{2}(?:,\h{2}[:.]?\h{2}[:.]?\h{2})*)?$/i
-       groups = groups.split(',').sort.uniq.map { |g| SDN::Message.parse_address(g) }
-       groups.fill(nil, groups.length, 16 - groups.length)
-       messages = []
-       sdn_addr = SDN::Message.parse_address(addr)
-       groups.each_with_index do |g, i|
-         if @groups[i] != g
-           messages << SDN::Message::SetGroupAddr.new(sdn_addr, i, g)
-           messages << SDN::Message::GetGroupAddr.new(sdn_addr, i)
-         end
-       end
-       messages
-     end
-
-     def groups_string
-       @groups.compact.map { |g| SDN::Message.print_address(g) }.sort.uniq.join(',')
-     end
-
-     def group_objects
-       groups_string.split(',').map { |addr| bridge.groups[addr.gsub('.', '')] }
-     end
+    def initialize(*)
+      members.each { |k| self[k] = :nil }
+      @groups = [].fill(nil, 0, 16)
+      super
     end
+
+    def publish(attribute, value)
+      if self[attribute] != value
+        bridge.publish("#{addr}/#{attribute}", value.to_s)
+        self[attribute] = value
+      end
+    end
+
+    def add_group(index, address)
+      group = bridge.add_group(SDN::Message.print_address(address)) if address
+      @groups[index] = address
+      group&.publish(:motors, group.motors_string)
+      publish(:groups, groups_string)
+    end
+
+    def set_groups(groups)
+      return unless groups =~ /^(?:\h{2}[:.]?\h{2}[:.]?\h{2}(?:,\h{2}[:.]?\h{2}[:.]?\h{2})*)?$/i
+      groups = groups.split(',').sort.uniq.map { |g| SDN::Message.parse_address(g) }.select { |g| SDN::Message.is_group_address?(g) }
+      groups.fill(nil, groups.length, 16 - groups.length)
+      messages = []
+      sdn_addr = SDN::Message.parse_address(addr)
+      groups.each_with_index do |g, i|
+        if @groups[i] != g
+          messages << SDN::Message::SetGroupAddr.new(sdn_addr, i, g)
+          messages << SDN::Message::GetGroupAddr.new(sdn_addr, i)
+        end
+      end
+      messages
+    end
+
+    def groups_string
+      @groups.compact.map { |g| SDN::Message.print_address(g) }.sort.uniq.join(',')
+    end
+
+    def group_objects
+      groups_string.split(',').map { |addr| bridge.groups[addr.gsub('.', '')] }
+    end
+  end
 
   class MQTTBridge
     WAIT_TIME = 0.25
@@ -197,7 +202,7 @@ module SDN
               motor.publish(:positionpulses, message.position_pulses)
               motor.publish(:ip, message.ip)
               motor.group_objects.each do |group|
-                positions = group.motors.map(&:positionpercent)
+                positions = group.motor_objects.map(&:positionpercent)
                 position = nil
                 # calculate an average, but only if we know a position for
                 # every shade
@@ -218,7 +223,7 @@ module SDN
               motor.publish(:last_action_source, message.last_action_source)
               motor.publish(:last_action_cause, message.last_action_cause)
               motor.group_objects.each do |group|
-                states = group.motors.map(&:state).uniq
+                states = group.motor_objects.map(&:state).uniq
                 state = states.length == 1 ? states.first : 'mixed'
                 group.publish(:state, state)
               end
@@ -319,8 +324,10 @@ module SDN
             property = value.downcase
             value = "true"
           end
-          motor = @motors[SDN::Message.print_address(addr).gsub('.', '')]
+          mqtt_addr = SDN::Message.print_address(addr).gsub('.', '')
+          motor = @motors[mqtt_addr]
           is_group = SDN::Message.is_group_address?(addr)
+          group = @groups[mqtt_addr]
           follow_up = SDN::Message::GetMotorStatus.new(addr)
           message = case property
             when 'label'
@@ -600,11 +607,12 @@ module SDN
 
     def add_group(addr)
       addr = addr.gsub('.', '')
-      return if @groups.key?(addr)
+      group = @groups[addr]
+      return group if group
 
       publish("#{addr}/$name", addr)
       publish("#{addr}/$type", "Shade Group")
-      publish("#{addr}/$properties", "down,up,stop,positionpulses,positionpercent,ip,wink,reset")
+      publish("#{addr}/$properties", "down,up,stop,positionpulses,positionpercent,ip,wink,reset,state,motors")
 
       publish("#{addr}/down/$name", "Move in down direction")
       publish("#{addr}/down/$datatype", "boolean")
@@ -647,8 +655,12 @@ module SDN
       publish("#{addr}/state/$datatype", "enum")
       publish("#{addr}/state/$format", SDN::Message::PostMotorStatus::STATE.keys.join(','))
 
-      @groups[addr] = Group.new(self, addr)
+      publish("#{addr}/motors/$name", "Motors that are members of this group")
+      publish("#{addr}/motors/$datatype", "string")
+
+      group = @groups[addr] = Group.new(self, addr)
       publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.to_a).join(","))
+      group
     end
   end
 end
