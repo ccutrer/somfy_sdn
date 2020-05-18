@@ -286,7 +286,7 @@ module SDN
                 message = @request_queue.shift
                 if message
                   @response_pending = Time.now.to_f + WAIT_TIME
-                  if message.dest == BROADCAST_ADDRESS || SDN::Message::is_group_address?(message.src)
+                  if message.dest == BROADCAST_ADDRESS || SDN::Message::is_group_address?(message.src) && message.is_a?(SDN::Message::GetNodeAddr)
                     @broadcast_pending = Time.now.to_f + BROADCAST_WAIT
                   end
                 end
