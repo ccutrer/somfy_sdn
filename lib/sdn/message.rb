@@ -77,8 +77,11 @@ module SDN
       length |= 0x80 if ack_requested
       result = transform_param(self.class.const_get(:MSG)) + transform_param(length) + result
       result.concat(checksum(result))
-      puts "wrote #{result.map { |b| '%02x' % b }.join(' ')}"
       result.pack("C*")
+    end
+
+    def ==(other)
+      self.serialize == other.serialize
     end
 
     def inspect

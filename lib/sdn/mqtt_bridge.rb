@@ -246,7 +246,9 @@ module SDN
             @mutex.synchronize do
               signal = @response_pending || !follow_ups.empty?
               @response_pending = @broadcast_pending
-              @request_queue.concat(follow_ups)
+              follow_ups.each do |follow_up|
+                @request_queue.push(follow_up) unless @request_queue.include?(follow_up)
+              end
               @cond.signal if signal
             end
           rescue EOFError
@@ -298,8 +300,10 @@ module SDN
             next unless message
 
             puts "writing #{message.inspect}"
-            @sdn.write(message.serialize)
+            serialized = message.serialize
+            @sdn.write(serialized)
             @sdn.flush
+            puts "wrote #{serialized.unpack("C*").map { |b| '%02x' % b }.join(' ')}"
           end
         rescue => e
           puts "failure writing: #{e}"
