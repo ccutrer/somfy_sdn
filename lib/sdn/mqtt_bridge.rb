@@ -270,6 +270,7 @@ module SDN
             @mutex.synchronize do
               # got woken up early by another command getting queued; spin
               if @response_pending
+                puts "another message queued, but we're still waiting"
                 while @response_pending
                   remaining_wait = @response_pending - Time.now.to_f
                   if remaining_wait < 0
@@ -282,17 +283,20 @@ module SDN
                       @prior_message = nil
                     end
                   else
+                    puts "waiting #{remaining_wait} more..."
                     @cond.wait(@mutex, remaining_wait)
                   end
                 end
               else
                 # minimum time between messages
+                puts "waiting between messages"
                 sleep 0.1
               end
 
+              puts "looking for next message to write"
               @queues.find { |q| message_and_retries = q.shift }
               if message_and_retries
-                if message_and_retries.message.ack_requested || message_and_retries.class.name =~ /^SDN::Message::Get/
+                if message_and_retries.message.ack_requested || message_and_retries.message.class.name =~ /^SDN::Message::Get/
                   @response_pending = Time.now.to_f + WAIT_TIME
                   if message_and_retries.message.dest == BROADCAST_ADDRESS || SDN::Message::is_group_address?(message_and_retries.message.src) && message_and_retries.message.is_a?(SDN::Message::GetNodeAddr)
                     @broadcast_pending = Time.now.to_f + BROADCAST_WAIT
@@ -301,22 +305,24 @@ module SDN
               end
 
               # wait until there is a message
-              @cond.wait(@mutex) unless message_and_retries
+              if @response_pending
+                message_and_retries.remaining_retries -= 1
+                @prior_message = message_and_retries  
+              elsif message_and_retries
+                @prior_message = nil  
+              else
+                @cond.wait(@mutex)
+              end
             end
             next unless message_and_retries
 
             message = message_and_retries.message
             puts "writing #{message.inspect}"
+            puts "(and waiting for response)" if @response_pending
             serialized = message.serialize
             @sdn.write(serialized)
             @sdn.flush
             puts "wrote #{serialized.unpack("C*").map { |b| '%02x' % b }.join(' ')}"
-            if @response_pending
-              message_and_retries.remaining_retries -= 1
-              @prior_message = message_and_retries
-            else
-              @prior_message = nil
-            end
           end
         rescue => e
           puts "failure writing: #{e}"
@@ -416,9 +422,9 @@ module SDN
               nil
           end
           if message
-            message.ack_requested = true if motor && message.class.name !~ /^SDN::Message::Get/
+            message.ack_requested = true if message.class.name !~ /^SDN::Message::Get/
             @mutex.synchronize do
-              @queues[0].push(MessageAndRetries.new(message, message.ack_requested ? 5 : 1, 0))
+              @queues[0].push(MessageAndRetries.new(message, 5, 0))
               @queues[1].push(MessageAndRetries.new(follow_up, 5, 1)) unless @queues[1].any? { |mr| mr.message == follow_up }
               @cond.signal
             end
