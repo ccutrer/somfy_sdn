@@ -3,6 +3,8 @@ require 'uri'
 require 'set'
 
 module SDN
+  MessageAndRetries = Struct.new(:message, :remaining_retries, :priority)
+
   Group = Struct.new(:bridge, :addr, :positionpercent, :state, :motors) do
     def initialize(*)
       members.each { |k| self[k] = :nil }
@@ -106,7 +108,7 @@ module SDN
       sdn_addr = SDN::Message.parse_address(addr)
       groups.each_with_index do |g, i|
         if @groups[i] != g
-          messages << SDN::Message::SetGroupAddr.new(sdn_addr, i, g)
+          messages << SDN::Message::SetGroupAddr.new(sdn_addr, i, g).tap { |m| m.ack_requested = true }
           messages << SDN::Message::GetGroupAddr.new(sdn_addr, i)
         end
       end
@@ -139,8 +141,7 @@ module SDN
 
       @mutex = Mutex.new
       @cond = ConditionVariable.new
-      @command_queue = []
-      @request_queue = []
+      @queues = [[], [], []]
       @response_pending = false
       @broadcast_pending = false
 
@@ -247,7 +248,7 @@ module SDN
               signal = @response_pending || !follow_ups.empty?
               @response_pending = @broadcast_pending
               follow_ups.each do |follow_up|
-                @request_queue.push(follow_up) unless @request_queue.include?(follow_up)
+                @queues[1].push(MessageAndRetries.new(follow_up, 5, 1)) unless @queues[1].any? { |mr| mr.message == follow_up }
               end
               @cond.signal if signal
             end
@@ -265,7 +266,7 @@ module SDN
       write_thread = Thread.new do
         begin
           loop do
-            message = nil
+            message_and_retries = nil
             @mutex.synchronize do
               # got woken up early by another command getting queued; spin
               if @response_pending
@@ -275,35 +276,47 @@ module SDN
                     puts "timed out waiting on response"
                     @response_pending = nil
                     @broadcast_pending = nil
+                    if @prior_message&.remaining_retries != 0
+                      puts "retrying #{@prior_message.remaining_retries} more times ..."
+                      @queues[@prior_message.priority].push(@prior_message)
+                      @prior_message = nil
+                    end
                   else
                     @cond.wait(@mutex, remaining_wait)
                   end
                 end
               else
+                # minimum time between messages
                 sleep 0.1
               end
 
-              message = @command_queue.shift
-              unless message
-                message = @request_queue.shift
-                if message
+              @queues.find { |q| message_and_retries = q.shift }
+              if message_and_retries
+                if message_and_retries.message.ack_requested || message_and_retries.class.name =~ /^SDN::Message::Get/
                   @response_pending = Time.now.to_f + WAIT_TIME
-                  if message.dest == BROADCAST_ADDRESS || SDN::Message::is_group_address?(message.src) && message.is_a?(SDN::Message::GetNodeAddr)
+                  if message_and_retries.message.dest == BROADCAST_ADDRESS || SDN::Message::is_group_address?(message_and_retries.message.src) && message_and_retries.message.is_a?(SDN::Message::GetNodeAddr)
                     @broadcast_pending = Time.now.to_f + BROADCAST_WAIT
                   end
                 end
               end
 
-              # spin until there is a message
-              @cond.wait(@mutex) unless message
+              # wait until there is a message
+              @cond.wait(@mutex) unless message_and_retries
             end
-            next unless message
+            next unless message_and_retries
 
+            message = message_and_retries.message
             puts "writing #{message.inspect}"
             serialized = message.serialize
             @sdn.write(serialized)
             @sdn.flush
             puts "wrote #{serialized.unpack("C*").map { |b| '%02x' % b }.join(' ')}"
+            if @response_pending
+              message_and_retries.remaining_retries -= 1
+              @prior_message = message_and_retries
+            else
+              @prior_message = nil
+            end
           end
         rescue => e
           puts "failure writing: #{e}"
@@ -316,7 +329,7 @@ module SDN
         if topic == "#{@base_topic}/discovery/discover/set" && value == "true"
           # trigger discovery
           @mutex.synchronize do
-            @request_queue.push(SDN::Message::GetNodeAddr.new)
+            @queues[2].push(MessageAndRetries.new(SDN::Message::GetNodeAddr.new, 1, 2))
             @cond.signal
           end
         elsif (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>discover|label|down|up|stop|positionpulses|positionpercent|ip|wink|reset|(?<speed_type>upspeed|downspeed|slowspeed)|uplimit|downlimit|direction|ip(?<ip>\d+)(?<ip_type>pulses|percent)|groups)/set$}))
@@ -397,15 +410,16 @@ module SDN
               next unless motor
               messages = motor.set_groups(value)
               @mutex.synchronize do
-                messages.each { |m| @command_queue.push(m) }
+                messages.each { |m| @queues[0].push(MessageAndRetries.new(m, 5, 0)) }
                 @cond.signal
               end
               nil
           end
           if message
+            message.ack_requested = true if motor && message.class.name !~ /^SDN::Message::Get/
             @mutex.synchronize do
-              @command_queue.push(message)
-              @request_queue.push(follow_up) unless @request_queue.include?(follow_up)
+              @queues[0].push(MessageAndRetries.new(message, message.ack_requested ? 5 : 1, 0))
+              @queues[1].push(MessageAndRetries.new(follow_up, 5, 1)) unless @queues[1].any? { |mr| mr.message == follow_up }
               @cond.signal
             end
           end
@@ -603,13 +617,13 @@ module SDN
 
       sdn_addr = SDN::Message.parse_address(addr)
       @mutex.synchronize do
-        @request_queue.push(SDN::Message::GetNodeLabel.new(sdn_addr))
-        @request_queue.push(SDN::Message::GetMotorStatus.new(sdn_addr))
-        @request_queue.push(SDN::Message::GetMotorLimits.new(sdn_addr))
-        @request_queue.push(SDN::Message::GetMotorDirection.new(sdn_addr))
-        @request_queue.push(SDN::Message::GetMotorRollingSpeed.new(sdn_addr))
-        (1..16).each { |ip| @request_queue.push(SDN::Message::GetMotorIP.new(sdn_addr, ip)) }
-        (0...16).each { |g| @request_queue.push(SDN::Message::GetGroupAddr.new(sdn_addr, g)) }
+        @queues[2].push(MessageAndRetries.new(SDN::Message::GetNodeLabel.new(sdn_addr), 5, 2))
+        @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorStatus.new(sdn_addr), 5, 2))
+        @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorLimits.new(sdn_addr), 5, 2))
+        @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorDirection.new(sdn_addr), 5, 2))
+        @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorRollingSpeed.new(sdn_addr), 5, 2))
+        (1..16).each { |ip| @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorIP.new(sdn_addr, ip), 5, 2)) }
+        (0...16).each { |g| @queues[2].push(MessageAndRetries.new(SDN::Message::GetGroupAddr.new(sdn_addr, g), 5, 2)) }
 
         @cond.signal
       end

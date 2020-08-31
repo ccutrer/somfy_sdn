@@ -55,6 +55,7 @@ module SDN
     singleton_class.include Helpers
 
     attr_reader :reserved, :ack_requested, :src, :dest
+    attr_writer :ack_requested
 
     def initialize(reserved: nil, ack_requested: false, src: nil, dest: nil)
       @reserved = reserved || 0x02 # message sent to Sonesse 30
