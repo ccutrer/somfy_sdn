@@ -79,7 +79,8 @@ module SDN
                      :ip15percent,
                      :ip16pulses,
                      :ip16percent,
-                     :groups) do
+                     :groups,
+                     :last_action) do
     def initialize(*)
       members.each { |k| self[k] = :nil }
       @groups = [].fill(nil, 0, 16)
@@ -214,7 +215,12 @@ module SDN
                 group.publish(:positionpercent, position)
               end
             when SDN::Message::PostMotorStatus
-              if message.state == :running || motor.state == :running
+              if message.state == :running || motor.state == :running ||
+                # if it's explicitly stopped, but we didn't ask it to, it's probably
+                # changing directions so keep querying
+                (message.state == :stopped &&
+                   message.last_action_cause == :explicit_command &&
+                   !(motor.last_action == SDN::Message::Stop || motor.last_action.nil?))
                 follow_ups << SDN::Message::GetMotorStatus.new(message.src)
               end
               # this will do one more position request after it stopped
@@ -424,6 +430,11 @@ module SDN
               end
               nil
           end
+
+          if motor
+            motor.last_action = message.class if [Message::MoveTo, Message::Move, Message::Wink, Message::Stop].include?(message.class)
+          end
+
           if message
             message.ack_requested = true if message.class.name !~ /^SDN::Message::Get/
             @mutex.synchronize do
