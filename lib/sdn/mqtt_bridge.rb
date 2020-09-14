@@ -245,8 +245,11 @@ module SDN
             end
 
             @mutex.synchronize do
-              signal = @response_pending || !follow_ups.empty?
-              @response_pending = @broadcast_pending
+              correct_response = @response_pending && message.src == @prior_message&.message&.dest
+              signal = correct_response || !follow_ups.empty?
+              puts "correct response #{correct_response}"
+              puts "pending: #{@response_pending} #{@broadcast_pending}"
+              @response_pending = @broadcast_pending if correct_response
               follow_ups.each do |follow_up|
                 @queues[1].push(MessageAndRetries.new(follow_up, 5, 1)) unless @queues[1].any? { |mr| mr.message == follow_up }
               end
