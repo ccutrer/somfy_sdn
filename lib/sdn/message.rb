@@ -5,6 +5,14 @@ module SDN
 
   class Message
     class << self
+      def expected_response
+        if name =~ /::Get([A-Za-z]+)/
+          const_get("Post#{$1}", true)
+        else
+          Ack
+        end
+      end
+
       def parse(data)
         offset = -1
         msg = length = ack_requested = message_class = nil

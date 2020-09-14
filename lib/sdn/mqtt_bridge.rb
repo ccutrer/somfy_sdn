@@ -245,7 +245,7 @@ module SDN
             end
 
             @mutex.synchronize do
-              correct_response = @response_pending && message.src == @prior_message&.message&.dest
+              correct_response = @response_pending && message.src == @prior_message&.message&.dest && message.is_a?(@prior_message&.message&.class&.expected_response)
               signal = correct_response || !follow_ups.empty?
               puts "correct response #{correct_response}"
               puts "pending: #{@response_pending} #{@broadcast_pending}"
