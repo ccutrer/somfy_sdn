@@ -159,12 +159,13 @@ module SDN
          'baud' => 4800,
          'parity' => Net::Telnet::RFC2217::ODD)
       else
-        require 'serialport'
-        @sdn = SerialPort.open(port, "baud" => 4800, "parity" => SerialPort::ODD)
+        require 'ccutrer-serialport'
+        @sdn = CCutrer::SerialPort.new(port, baud: 4800, parity: :odd)
       end
 
       read_thread = Thread.new do
         buffer = ""
+
         loop do
           begin
             message, bytes_read = SDN::Message.parse(buffer.bytes)
@@ -174,7 +175,7 @@ module SDN
               begin
                 buffer.concat(@sdn.read_nonblock(64 * 1024))
                 next
-              rescue IO::WaitReadable
+              rescue IO::WaitReadable, EOFError
                 wait = buffer.empty? ? nil : WAIT_TIME
                 if @sdn.wait_readable(wait).nil?
                   # timed out; just discard everything
@@ -330,7 +331,7 @@ module SDN
             puts "(and waiting for response)" if @response_pending
             serialized = message.serialize
             @sdn.write(serialized)
-            @sdn.flush
+            @sdn.flush if @sdn.respond_to?(:flush)
             puts "wrote #{serialized.unpack("C*").map { |b| '%02x' % b }.join(' ')}"
           end
         rescue => e
