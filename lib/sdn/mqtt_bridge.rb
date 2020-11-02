@@ -254,8 +254,6 @@ module SDN
             @mutex.synchronize do
               correct_response = @response_pending && message.src == @prior_message&.message&.dest && message.is_a?(@prior_message&.message&.class&.expected_response)
               signal = correct_response || !follow_ups.empty?
-              puts "correct response #{correct_response}"
-              puts "pending: #{@response_pending} #{@broadcast_pending}"
               @response_pending = @broadcast_pending if correct_response
               follow_ups.each do |follow_up|
                 @queues[1].push(MessageAndRetries.new(follow_up, 5, 1)) unless @queues[1].any? { |mr| mr.message == follow_up }
@@ -280,7 +278,6 @@ module SDN
             @mutex.synchronize do
               # got woken up early by another command getting queued; spin
               if @response_pending
-                puts "another message queued, but we're still waiting"
                 while @response_pending
                   remaining_wait = @response_pending - Time.now.to_f
                   if remaining_wait < 0
@@ -293,17 +290,14 @@ module SDN
                       @prior_message = nil
                     end
                   else
-                    puts "waiting #{remaining_wait} more..."
                     @cond.wait(@mutex, remaining_wait)
                   end
                 end
               else
                 # minimum time between messages
-                puts "waiting between messages"
                 sleep 0.1
               end
 
-              puts "looking for next message to write"
               @queues.find { |q| message_and_retries = q.shift }
               if message_and_retries
                 if message_and_retries.message.ack_requested || message_and_retries.message.class.name =~ /^SDN::Message::Get/
@@ -328,7 +322,6 @@ module SDN
 
             message = message_and_retries.message
             puts "writing #{message.inspect}"
-            puts "(and waiting for response)" if @response_pending
             serialized = message.serialize
             @sdn.write(serialized)
             @sdn.flush if @sdn.respond_to?(:flush)
