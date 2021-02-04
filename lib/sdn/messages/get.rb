@@ -95,5 +95,10 @@ module SDN
     class GetNodeStackVersion < SimpleRequest
       MSG = 0x70
     end
+
+    class GetNodeAppVersion < SimpleRequest
+      MSG = 0x74
+    end
+
   end
 end

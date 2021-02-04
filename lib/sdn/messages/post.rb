@@ -145,18 +145,23 @@ module SDN
       end
     end
 
-    class PostNodeStackVersion < UnknownMessage
-      MSG = 0x71
+    class PostNodeAppVersion < Message
+      MSG = 0x75
+      PARAMS_LENGTH = 6
 
-      attr_accessor :params
+      attr_accessor :reference, :index_letter, :index_number, :profile
 
       def parse(params)
-        # I don't know how to interpret this yet
-        # I get b6 bc b2 be fc fe, and UAI+ shows 5063497A3
         super
+        self.reference = to_number(params[0..2])
+        self.index_letter = to_string(params[3..3])
+        self.index_number = transform_param(params[4])
+        self.profile = transform_param(params[5])
       end
+    end
 
-      def msg; MSG; end
+    class PostNodeStackVersion < PostNodeAppVersion
+      MSG = 0x71
     end
   end
 end

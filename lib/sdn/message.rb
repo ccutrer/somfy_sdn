@@ -6,6 +6,7 @@ module SDN
   class Message
     class << self
       def inherited(klass)
+        return Message.inherited(klass) unless self == Message
         @message_map = nil
         (@subclasses ||= []) << klass
       end
@@ -166,10 +167,12 @@ module SDN
       def serialize
         # prevent serializing something we don't know
         raise NotImplementedError unless params
+        super
       end
 
       def class_inspect
-        result = ", @msg=%02xh" % msg
+        result = ", @msg=%02xh" % msg if self.class == UnknownMessage
+        result ||= ""
         return result if params.empty?
 
         result << ", @params=#{params.map { |b| "%02x" % b }.join(' ')}"
