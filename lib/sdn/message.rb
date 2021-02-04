@@ -5,6 +5,11 @@ module SDN
 
   class Message
     class << self
+      def inherited(klass)
+        @message_map = nil
+        (@subclasses ||= []) << klass
+      end
+
       def expected_response
         if name =~ /::Get([A-Za-z]+)/
           const_get("Post#{$1}", true)
@@ -30,9 +35,7 @@ module SDN
           # it could be garbage on the line so keep scanning
           next if length > data.length - offset
 
-          message_class = constants.find { |c| (const_get(c, false).const_get(:MSG, false) rescue nil) == msg }
-          message_class = const_get(message_class, false) if message_class
-          message_class ||= UnknownMessage
+          message_class = message_map[msg] || UnknownMessage
 
           calculated_sum = checksum(data.slice(offset, length - 2))
           read_sum = data.slice(offset + length - 2, 2)
@@ -56,6 +59,17 @@ module SDN
           result = nil
         end
         [result, offset + length]
+      end
+
+      private
+
+      def message_map
+        @message_map ||=
+          @subclasses.inject({}) do |memo, klass|
+            next memo unless klass.constants.include?(:MSG)
+            memo[klass.const_get(:MSG, false)] = klass
+            memo
+          end
       end
     end
 
@@ -142,7 +156,17 @@ module SDN
     class UnknownMessage < Message
       attr_accessor :msg, :params
 
+      def initialize(dest = nil, **kwargs)
+        kwargs[:dest] ||= dest
+        super(**kwargs)
+      end
+
       alias parse params=
+
+      def serialize
+        # prevent serializing something we don't know
+        raise NotImplementedError unless params
+      end
 
       def class_inspect
         result = ", @msg=%02xh" % msg
@@ -158,3 +182,6 @@ require 'sdn/messages/control'
 require 'sdn/messages/get'
 require 'sdn/messages/post'
 require 'sdn/messages/set'
+require 'sdn/messages/ilt2/get'
+require 'sdn/messages/ilt2/post'
+require 'sdn/messages/ilt2/set'
