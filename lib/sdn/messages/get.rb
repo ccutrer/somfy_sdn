@@ -26,7 +26,7 @@ module SDN
 
       attr_reader :ip
 
-      def initialize(dest = nil, ip = nil, **kwargs)
+      def initialize(dest = nil, ip = 1, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
         self.ip = ip
@@ -34,16 +34,16 @@ module SDN
 
       def parse(params)
         super
-        self.ip = to_number(params[0], nillable: true)
+        self.ip = to_number(params[0])
       end
 
       def ip=(value)
-        raise ArgumentError, "invalid IP #{ip} (should be 1-16)" unless ip.nil? || (1..16).include?(ip)
+        raise ArgumentError, "invalid IP #{value} (should be 1-16)" unless (1..16).include?(value)
         @ip = value
       end
 
       def params
-        transform_param(@ip || 0xff)
+        transform_param(ip)
       end
     end
 
@@ -53,7 +53,7 @@ module SDN
 
       attr_reader :group_index
 
-      def initialize(dest = nil, group_index = 0, **kwargs)
+      def initialize(dest = nil, group_index = 1, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
         self.group_index = group_index
@@ -61,17 +61,21 @@ module SDN
 
       def parse(params)
         super
-        self.group_index = to_number(params[0])
+        self.group_index = to_number(params[0]) + 1
       end
 
       def group_index=(value)
-        raise ArgumentError, "group_index is out of range" unless (0...16).include?(value)
+        raise ArgumentError, "group_index is out of range" unless (1..16).include?(value)
         @group_index = value
       end
 
       def params
-        transform_param(group_index)
+        transform_param(group_index - 1)
       end
+    end
+
+    class GetNetworkLock < SimpleRequest
+      MSG = 0x26
     end
 
     class GetNodeLabel < SimpleRequest

@@ -6,11 +6,22 @@ module SDN
 
       attr_accessor :position_pulses, :position_percent, :ip
 
+      def initialize(position_pulses = nil, position_percent = nil, ip = nil, **kwargs)
+        super(**kwargs)
+        self.position_pulses = position_pulses
+        self.position_percent = position_percent
+        self.ip = ip
+      end
+
       def parse(params)
         super
         self.position_pulses = to_number(params[0..1], nillable: true)
         self.position_percent = to_number(params[2], nillable: true)
         self.ip = to_number(params[4], nillable: true)
+      end
+
+      def params
+        from_number(position_pulses, 2) + from_number(position_percent) + from_number(ip)
       end
     end
 
@@ -48,10 +59,20 @@ module SDN
 
       attr_accessor :up_limit, :down_limit
 
+      def initialize(up_limit = nil, down_limit = nil, **kwargs)
+        super(**kwargs)
+        self.up_limit = up_limit
+        self.down_limit = down_limit
+      end
+
       def parse(params)
         super
         self.up_limit = to_number(params[0..1], nillable: true)
         self.down_limit = to_number(params[2..3], nillable: true)
+      end
+
+      def params
+        from_number(up_limit, 2) + from_number(down_limit, 2)
       end
     end
 
@@ -89,11 +110,31 @@ module SDN
 
       attr_accessor :ip, :position_pulses, :position_percent
 
+      def initialize(ip = nil, position_pulses = nil, position_percent = nil, **kwargs)
+        super(**kwargs)
+        self.ip = ip
+        self.position_pulses = position_pulses
+        self.position_percent = position_percent
+      end
+
       def parse(params)
         super
         self.ip = to_number(params[0])
         self.position_pulses = to_number(params[1..2], nillable: true)
         self.position_percent = to_number(params[3], nillable: true)
+      end
+
+      def params
+        from_number(ip) + from_number(position_pulses, 2) + from_number(position_percent)
+      end
+    end
+
+    class PostNetworkLock < UnknownMessage
+      MSG = 0x36
+      PARAMS_LENGTH = 5
+
+      def parse(params)
+        super
       end
     end
 
@@ -106,13 +147,23 @@ module SDN
       MSG = 0x61
       PARAMS_LENGTH = 4
 
+      def initialize(group_index = nil, group_address = nil, **kwargs)
+        super(**kwargs)
+        self.group_index = group_index
+        self.group_address = group_address
+      end
+
       attr_accessor :group_index, :group_address
 
       def parse(params)
         super
-        self.group_index = to_number(params[0])
+        self.group_index = to_number(params[0]) + 1
         self.group_address = transform_param(params[1..3])
         self.group_address = nil if group_address == [0, 0, 0] || group_address == [0x01, 0x01, 0xff]
+      end
+
+      def params
+        from_number(group_index - 1) + transform_param(group_address || [0, 0, 0])
       end
 
       def class_inspect
@@ -122,11 +173,21 @@ module SDN
 
     class PostNodeLabel < Message
       MSG = 0x65
+      MAX_LENGTH = 16
 
       attr_accessor :label
 
+      def initialize(label = nil, **kwargs)
+        super(**kwargs)
+        self.label = label
+      end
+
       def parse(params)
         @label = to_string(params)
+      end
+
+      def params
+        from_string(label, self.class::MAX_LENGTH)
       end
     end
 

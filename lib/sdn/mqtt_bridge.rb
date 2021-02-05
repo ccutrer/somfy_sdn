@@ -133,9 +133,11 @@ module SDN
 
     def initialize(mqtt_uri, port, device_id: "somfy", base_topic: "homie")
       @base_topic = "#{base_topic}/#{device_id}"
-      @mqtt = MQTT::Client.new(mqtt_uri)
-      @mqtt.set_will("#{@base_topic}/$state", "lost", true)
-      @mqtt.connect
+      unless mqtt_uri.empty?
+        @mqtt = MQTT::Client.new(mqtt_uri)
+        @mqtt.set_will("#{@base_topic}/$state", "lost", true)
+        @mqtt.connect
+      end
 
       @motors = {}
       @groups = {}
@@ -146,127 +148,97 @@ module SDN
       @response_pending = false
       @broadcast_pending = false
 
-      publish_basic_attributes
+      publish_basic_attributes if @mqtt
 
-      uri = URI.parse(port)
-      if uri.scheme == "tcp"
-        require 'socket'
-        @sdn = TCPSocket.new(uri.host, uri.port)
-      elsif uri.scheme == "telnet" || uri.scheme == "rfc2217"
-        require 'net/telnet/rfc2217'
-        @sdn = Net::Telnet::RFC2217.new('Host' => uri.host,
-         'Port' => uri.port || 23,
-         'baud' => 4800,
-         'parity' => Net::Telnet::RFC2217::ODD)
-      else
-        require 'ccutrer-serialport'
-        @sdn = CCutrer::SerialPort.new(port, baud: 4800, parity: :odd)
-      end
+      @sdn = SDN::Client.new(port)
 
       read_thread = Thread.new do
-        buffer = ""
-
         loop do
           begin
-            message, bytes_read = SDN::Message.parse(buffer.bytes)
-            # discard how much we read
-            buffer = buffer[bytes_read..-1]
-            unless message
-              begin
-                buffer.concat(@sdn.read_nonblock(64 * 1024))
-                next
-              rescue IO::WaitReadable, EOFError
-                wait = buffer.empty? ? nil : WAIT_TIME
-                if @sdn.wait_readable(wait).nil?
-                  # timed out; just discard everything
-                  puts "timed out reading; discarding buffer: #{buffer.unpack('H*').first}"
-                  buffer = ""
+            @sdn.receive do |message|
+              src = SDN::Message.print_address(message.src)
+              # ignore the UAI Plus and ourselves
+              if src != '7F.7F.7F' && !SDN::Message::is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
+                motor = publish_motor(src.gsub('.', '')) if @mqtt
+                puts "found new motor #{src}"
+              end
+
+              puts "read #{message.inspect}"
+              next unless @mqtt
+              follow_ups = []
+              case message
+              when SDN::Message::PostNodeLabel
+                if (motor.publish(:label, message.label))
+                  publish("#{motor.addr}/$name", message.label)
                 end
-              end
-              next
-            end
+              when SDN::Message::PostMotorPosition
+                motor.publish(:positionpercent, message.position_percent)
+                motor.publish(:positionpulses, message.position_pulses)
+                motor.publish(:ip, message.ip)
+                motor.group_objects.each do |group|
+                  positions = group.motor_objects.map(&:positionpercent)
+                  position = nil
+                  # calculate an average, but only if we know a position for
+                  # every shade
+                  if !positions.include?(:nil) && !positions.include?(nil)
+                    position = positions.inject(&:+) / positions.length
+                  end
 
-            src = SDN::Message.print_address(message.src)
-            # ignore the UAI Plus and ourselves
-            if src != '7F.7F.7F' && !SDN::Message::is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
-              motor = publish_motor(src.gsub('.', ''))
-              puts "found new motor #{src}"
-            end
-
-            puts "read #{message.inspect}"
-            follow_ups = []
-            case message
-            when SDN::Message::PostNodeLabel
-              if (motor.publish(:label, message.label))
-                publish("#{motor.addr}/$name", message.label)
-              end
-            when SDN::Message::PostMotorPosition
-              motor.publish(:positionpercent, message.position_percent)
-              motor.publish(:positionpulses, message.position_pulses)
-              motor.publish(:ip, message.ip)
-              motor.group_objects.each do |group|
-                positions = group.motor_objects.map(&:positionpercent)
-                position = nil
-                # calculate an average, but only if we know a position for
-                # every shade
-                if !positions.include?(:nil) && !positions.include?(nil)
-                  position = positions.inject(&:+) / positions.length
+                  group.publish(:positionpercent, position)
                 end
+              when SDN::Message::PostMotorStatus
+                if message.state == :running || motor.state == :running ||
+                  # if it's explicitly stopped, but we didn't ask it to, it's probably
+                  # changing directions so keep querying
+                  (message.state == :stopped &&
+                    message.last_action_cause == :explicit_command &&
+                    !(motor.last_action == SDN::Message::Stop || motor.last_action.nil?))
+                  follow_ups << SDN::Message::GetMotorStatus.new(message.src)
+                end
+                # this will do one more position request after it stopped
+                follow_ups << SDN::Message::GetMotorPosition.new(message.src)
+                motor.publish(:state, message.state)
+                motor.publish(:last_direction, message.last_direction)
+                motor.publish(:last_action_source, message.last_action_source)
+                motor.publish(:last_action_cause, message.last_action_cause)
+                motor.group_objects.each do |group|
+                  states = group.motor_objects.map(&:state).uniq
+                  state = states.length == 1 ? states.first : 'mixed'
+                  group.publish(:state, state)
+                end
+              when SDN::Message::PostMotorLimits
+                motor.publish(:uplimit, message.up_limit)
+                motor.publish(:downlimit, message.down_limit)
+              when SDN::Message::PostMotorDirection
+                motor.publish(:direction, message.direction)
+              when SDN::Message::PostMotorRollingSpeed
+                motor.publish(:upspeed, message.up_speed)
+                motor.publish(:downspeed, message.down_speed)
+                motor.publish(:slowspeed, message.slow_speed)
+              when SDN::Message::PostMotorIP
+                motor.publish(:"ip#{message.ip}pulses", message.position_pulses)
+                motor.publish(:"ip#{message.ip}percent", message.position_percent)
+              when SDN::Message::PostGroupAddr
+                motor.add_group(message.group_index, message.group_address)
+              end
 
-                group.publish(:positionpercent, position)
+              @mutex.synchronize do
+                correct_response = @response_pending && message.src == @prior_message&.message&.dest && message.is_a?(@prior_message&.message&.class&.expected_response)
+                signal = correct_response || !follow_ups.empty?
+                @response_pending = @broadcast_pending if correct_response
+                follow_ups.each do |follow_up|
+                  @queues[1].push(MessageAndRetries.new(follow_up, 5, 1)) unless @queues[1].any? { |mr| mr.message == follow_up }
+                end
+                @cond.signal if signal
               end
-            when SDN::Message::PostMotorStatus
-              if message.state == :running || motor.state == :running ||
-                # if it's explicitly stopped, but we didn't ask it to, it's probably
-                # changing directions so keep querying
-                (message.state == :stopped &&
-                   message.last_action_cause == :explicit_command &&
-                   !(motor.last_action == SDN::Message::Stop || motor.last_action.nil?))
-                follow_ups << SDN::Message::GetMotorStatus.new(message.src)
-              end
-              # this will do one more position request after it stopped
-              follow_ups << SDN::Message::GetMotorPosition.new(message.src)
-              motor.publish(:state, message.state)
-              motor.publish(:last_direction, message.last_direction)
-              motor.publish(:last_action_source, message.last_action_source)
-              motor.publish(:last_action_cause, message.last_action_cause)
-              motor.group_objects.each do |group|
-                states = group.motor_objects.map(&:state).uniq
-                state = states.length == 1 ? states.first : 'mixed'
-                group.publish(:state, state)
-              end
-            when SDN::Message::PostMotorLimits
-              motor.publish(:uplimit, message.up_limit)
-              motor.publish(:downlimit, message.down_limit)
-            when SDN::Message::PostMotorDirection
-              motor.publish(:direction, message.direction)
-            when SDN::Message::PostMotorRollingSpeed
-              motor.publish(:upspeed, message.up_speed)
-              motor.publish(:downspeed, message.down_speed)
-              motor.publish(:slowspeed, message.slow_speed)
-            when SDN::Message::PostMotorIP
-              motor.publish(:"ip#{message.ip}pulses", message.position_pulses)
-              motor.publish(:"ip#{message.ip}percent", message.position_percent)
-            when SDN::Message::PostGroupAddr
-              motor.add_group(message.group_index, message.group_address)
+            rescue EOFError
+              puts "EOF reading"
+              exit 2
+            rescue SDN::MalformedMessage => e
+              puts "ignoring malformed message: #{e}" unless e.to_s =~ /issing data/
+            rescue => e
+              puts "got garbage: #{e}; #{e.backtrace}"
             end
-
-            @mutex.synchronize do
-              correct_response = @response_pending && message.src == @prior_message&.message&.dest && message.is_a?(@prior_message&.message&.class&.expected_response)
-              signal = correct_response || !follow_ups.empty?
-              @response_pending = @broadcast_pending if correct_response
-              follow_ups.each do |follow_up|
-                @queues[1].push(MessageAndRetries.new(follow_up, 5, 1)) unless @queues[1].any? { |mr| mr.message == follow_up }
-              end
-              @cond.signal if signal
-            end
-          rescue EOFError
-            puts "EOF reading"
-            exit 2
-          rescue SDN::MalformedMessage => e
-            puts "ignoring malformed message: #{e}" unless e.to_s =~ /issing data/
-          rescue => e
-            puts "got garbage: #{e}; #{e.backtrace}"
           end
         end
       end
@@ -322,15 +294,17 @@ module SDN
 
             message = message_and_retries.message
             puts "writing #{message.inspect}"
-            serialized = message.serialize
-            @sdn.write(serialized)
-            @sdn.flush if @sdn.respond_to?(:flush)
+            @sdn.send(message)
             puts "wrote #{serialized.unpack("C*").map { |b| '%02x' % b }.join(' ')}"
           end
         rescue => e
           puts "failure writing: #{e}"
           exit 1
         end
+      end
+
+      unless @mqtt
+        loop { sleep 600 }
       end
 
       @mqtt.get do |topic, value|
@@ -499,10 +473,38 @@ module SDN
       publish("$state", "ready")
     end
 
-    def publish_motor(addr)
+    def publish_motor(addr, node_type)
       publish("#{addr}/$name", addr)
-      publish("#{addr}/$type", "Sonesse 30 Motor")
-      publish("#{addr}/$properties", "discover,label,down,up,stop,positionpulses,positionpercent,ip,wink,reset,state,last_direction,last_action_source,last_action_cause,uplimit,downlimit,direction,upspeed,downspeed,slowspeed,#{(1..16).map { |ip| "ip#{ip}pulses,ip#{ip}percent" }.join(',')},groups")
+      publish("#{addr}/$type", node_type.to_s)
+      properties = %w{
+        discover
+        label
+        down
+        up
+        stop
+        positionpercent
+        ip
+      } + (1..16).map { |ip| "ip#{ip}percent" }
+
+      unless node_type == :st50ilt2
+        properties.concat %w{
+          positionpulses
+          wink
+          reset
+          state
+          last_direction
+          last_action_source
+          last_action_cause
+          uplimit
+          downlimit
+          direction
+          upspeed
+          downspeed
+          groups
+        } + (1..16).map { |ip| "ip#{ip}pulses" }
+      end
+
+      publish("#{addr}/$properties", )
 
       publish("#{addr}/discover/$name", "Trigger Motor Discovery")
       publish("#{addr}/discover/$datatype", "boolean")
@@ -528,12 +530,6 @@ module SDN
       publish("#{addr}/stop/$settable", "true")
       publish("#{addr}/stop/$retained", "false")
 
-      publish("#{addr}/positionpulses/$name", "Position from up limit (in pulses)")
-      publish("#{addr}/positionpulses/$datatype", "integer")
-      publish("#{addr}/positionpulses/$format", "0:65535")
-      publish("#{addr}/positionpulses/$unit", "pulses")
-      publish("#{addr}/positionpulses/$settable", "true")
-
       publish("#{addr}/positionpercent/$name", "Position (in %)")
       publish("#{addr}/positionpercent/$datatype", "integer")
       publish("#{addr}/positionpercent/$format", "0:100")
@@ -545,67 +541,75 @@ module SDN
       publish("#{addr}/ip/$format", "1:16")
       publish("#{addr}/ip/$settable", "true")
 
-      publish("#{addr}/wink/$name", "Feedback")
-      publish("#{addr}/wink/$datatype", "boolean")
-      publish("#{addr}/wink/$settable", "true")
-      publish("#{addr}/wink/$retained", "false")
+      unless node_type == :st50ilt2
+        publish("#{addr}/positionpulses/$name", "Position from up limit (in pulses)")
+        publish("#{addr}/positionpulses/$datatype", "integer")
+        publish("#{addr}/positionpulses/$format", "0:65535")
+        publish("#{addr}/positionpulses/$unit", "pulses")
+        publish("#{addr}/positionpulses/$settable", "true")
 
-      publish("#{addr}/reset/$name", "Recall factory settings")
-      publish("#{addr}/reset/$datatype", "enum")
-      publish("#{addr}/reset/$format", SDN::Message::SetFactoryDefault::RESET.keys.join(','))
-      publish("#{addr}/reset/$settable", "true")
-      publish("#{addr}/reset/$retained", "false")
+        publish("#{addr}/wink/$name", "Feedback")
+        publish("#{addr}/wink/$datatype", "boolean")
+        publish("#{addr}/wink/$settable", "true")
+        publish("#{addr}/wink/$retained", "false")
 
-      publish("#{addr}/state/$name", "State of the motor")
-      publish("#{addr}/state/$datatype", "enum")
-      publish("#{addr}/state/$format", SDN::Message::PostMotorStatus::STATE.keys.join(','))
+        publish("#{addr}/reset/$name", "Recall factory settings")
+        publish("#{addr}/reset/$datatype", "enum")
+        publish("#{addr}/reset/$format", SDN::Message::SetFactoryDefault::RESET.keys.join(','))
+        publish("#{addr}/reset/$settable", "true")
+        publish("#{addr}/reset/$retained", "false")
 
-      publish("#{addr}/last_direction/$name", "Direction of last motion")
-      publish("#{addr}/last_direction/$datatype", "enum")
-      publish("#{addr}/last_direction/$format", SDN::Message::PostMotorStatus::DIRECTION.keys.join(','))
+        publish("#{addr}/state/$name", "State of the motor")
+        publish("#{addr}/state/$datatype", "enum")
+        publish("#{addr}/state/$format", SDN::Message::PostMotorStatus::STATE.keys.join(','))
 
-      publish("#{addr}/last_action_source/$name", "Source of last action")
-      publish("#{addr}/last_action_source/$datatype", "enum")
-      publish("#{addr}/last_action_source/$format", SDN::Message::PostMotorStatus::SOURCE.keys.join(','))
+        publish("#{addr}/last_direction/$name", "Direction of last motion")
+        publish("#{addr}/last_direction/$datatype", "enum")
+        publish("#{addr}/last_direction/$format", SDN::Message::PostMotorStatus::DIRECTION.keys.join(','))
 
-      publish("#{addr}/last_action_cause/$name", "Cause of last action")
-      publish("#{addr}/last_action_cause/$datatype", "enum")
-      publish("#{addr}/last_action_cause/$format", SDN::Message::PostMotorStatus::CAUSE.keys.join(','))
+        publish("#{addr}/last_action_source/$name", "Source of last action")
+        publish("#{addr}/last_action_source/$datatype", "enum")
+        publish("#{addr}/last_action_source/$format", SDN::Message::PostMotorStatus::SOURCE.keys.join(','))
 
-      publish("#{addr}/uplimit/$name", "Up limit (always = 0)")
-      publish("#{addr}/uplimit/$datatype", "integer")
-      publish("#{addr}/uplimit/$format", "0:65535")
-      publish("#{addr}/uplimit/$unit", "pulses")
-      publish("#{addr}/uplimit/$settable", "true")
+        publish("#{addr}/last_action_cause/$name", "Cause of last action")
+        publish("#{addr}/last_action_cause/$datatype", "enum")
+        publish("#{addr}/last_action_cause/$format", SDN::Message::PostMotorStatus::CAUSE.keys.join(','))
 
-      publish("#{addr}/downlimit/$name", "Down limit")
-      publish("#{addr}/downlimit/$datatype", "integer")
-      publish("#{addr}/downlimit/$format", "0:65535")
-      publish("#{addr}/downlimit/$unit", "pulses")
-      publish("#{addr}/downlimit/$settable", "true")
+        publish("#{addr}/uplimit/$name", "Up limit (always = 0)")
+        publish("#{addr}/uplimit/$datatype", "integer")
+        publish("#{addr}/uplimit/$format", "0:65535")
+        publish("#{addr}/uplimit/$unit", "pulses")
+        publish("#{addr}/uplimit/$settable", "true")
 
-      publish("#{addr}/direction/$name", "Motor rotation direction")
-      publish("#{addr}/direction/$datatype", "enum")
-      publish("#{addr}/direction/$format", "standard,reversed")
-      publish("#{addr}/direction/$settable", "true")
+        publish("#{addr}/downlimit/$name", "Down limit")
+        publish("#{addr}/downlimit/$datatype", "integer")
+        publish("#{addr}/downlimit/$format", "0:65535")
+        publish("#{addr}/downlimit/$unit", "pulses")
+        publish("#{addr}/downlimit/$settable", "true")
 
-      publish("#{addr}/upspeed/$name", "Up speed")
-      publish("#{addr}/upspeed/$datatype", "integer")
-      publish("#{addr}/upspeed/$format", "6:28")
-      publish("#{addr}/upspeed/$unit", "RPM")
-      publish("#{addr}/upspeed/$settable", "true")
+        publish("#{addr}/direction/$name", "Motor rotation direction")
+        publish("#{addr}/direction/$datatype", "enum")
+        publish("#{addr}/direction/$format", "standard,reversed")
+        publish("#{addr}/direction/$settable", "true")
 
-      publish("#{addr}/downspeed/$name", "Down speed, always = Up speed")
-      publish("#{addr}/downspeed/$datatype", "integer")
-      publish("#{addr}/downspeed/$format", "6:28")
-      publish("#{addr}/downspeed/$unit", "RPM")
-      publish("#{addr}/downspeed/$settable", "true")
+        publish("#{addr}/upspeed/$name", "Up speed")
+        publish("#{addr}/upspeed/$datatype", "integer")
+        publish("#{addr}/upspeed/$format", "6:28")
+        publish("#{addr}/upspeed/$unit", "RPM")
+        publish("#{addr}/upspeed/$settable", "true")
 
-      publish("#{addr}/slowspeed/$name", "Slow speed")
-      publish("#{addr}/slowspeed/$datatype", "integer")
-      publish("#{addr}/slowspeed/$format", "6:28")
-      publish("#{addr}/slowspeed/$unit", "RPM")
-      publish("#{addr}/slowspeed/$settable", "true")
+        publish("#{addr}/downspeed/$name", "Down speed, always = Up speed")
+        publish("#{addr}/downspeed/$datatype", "integer")
+        publish("#{addr}/downspeed/$format", "6:28")
+        publish("#{addr}/downspeed/$unit", "RPM")
+        publish("#{addr}/downspeed/$settable", "true")
+
+        publish("#{addr}/slowspeed/$name", "Slow speed")
+        publish("#{addr}/slowspeed/$datatype", "integer")
+        publish("#{addr}/slowspeed/$format", "6:28")
+        publish("#{addr}/slowspeed/$unit", "RPM")
+        publish("#{addr}/slowspeed/$settable", "true")
+      end
 
       publish("#{addr}/groups/$name", "Group Memberships")
       publish("#{addr}/groups/$datatype", "string")
@@ -618,26 +622,33 @@ module SDN
         publish("#{addr}/ip#{ip}pulses/$unit", "pulses")
         publish("#{addr}/ip#{ip}pulses/$settable", "true")
 
-        publish("#{addr}/ip#{ip}percent/$name", "Intermediate Position #{ip}")
-        publish("#{addr}/ip#{ip}percent/$datatype", "integer")
-        publish("#{addr}/ip#{ip}percent/$format", "0:100")
-        publish("#{addr}/ip#{ip}percent/$unit", "%")
-        publish("#{addr}/ip#{ip}percent/$settable", "true")
+        unless node_type == :st50ilt2
+          publish("#{addr}/ip#{ip}percent/$name", "Intermediate Position #{ip}")
+          publish("#{addr}/ip#{ip}percent/$datatype", "integer")
+          publish("#{addr}/ip#{ip}percent/$format", "0:100")
+          publish("#{addr}/ip#{ip}percent/$unit", "%")
+          publish("#{addr}/ip#{ip}percent/$settable", "true")
+        end
       end
 
-      motor = Motor.new(self, addr)
+      motor = Motor.new(self, addr, node_type)
       @motors[addr] = motor
       publish("$nodes", (["discovery"] + @motors.keys.sort + @groups.keys.sort).join(","))
 
       sdn_addr = SDN::Message.parse_address(addr)
       @mutex.synchronize do
         @queues[2].push(MessageAndRetries.new(SDN::Message::GetNodeLabel.new(sdn_addr), 5, 2))
-        @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorStatus.new(sdn_addr), 5, 2))
-        @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorLimits.new(sdn_addr), 5, 2))
-        @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorDirection.new(sdn_addr), 5, 2))
-        @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorRollingSpeed.new(sdn_addr), 5, 2))
-        (1..16).each { |ip| @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorIP.new(sdn_addr, ip), 5, 2)) }
-        (0...16).each { |g| @queues[2].push(MessageAndRetries.new(SDN::Message::GetGroupAddr.new(sdn_addr, g), 5, 2)) }
+        case node_type
+        when :st30
+          @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorStatus.new(sdn_addr), 5, 2))
+          @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorLimits.new(sdn_addr), 5, 2))
+          @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorDirection.new(sdn_addr), 5, 2))
+          @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorRollingSpeed.new(sdn_addr), 5, 2))
+          (1..16).each { |ip| @queues[2].push(MessageAndRetries.new(SDN::Message::GetMotorIP.new(sdn_addr, ip), 5, 2)) }
+        when :st50ilt2
+          (1..16).each { |ip| @queues[2].push(MessageAndRetries.new(SDN::Message::ILT2::GetMotorIP.new(sdn_addr, ip), 5, 2)) }
+        end
+        (1..16).each { |g| @queues[2].push(MessageAndRetries.new(SDN::Message::GetGroupAddr.new(sdn_addr, g), 5, 2)) }
 
         @cond.signal
       end

@@ -25,13 +25,17 @@ module SDN
         # we loop here scanning for a valid message
         loop do
           offset += 1
+          # give these weird messages a chance
+          result = ILT2::MasterControl.parse(data)
+          return result if result
+
           return [nil, 0] if data.length - offset < 11
           msg = to_number(data[offset])
           length = to_number(data[offset + 1])
           ack_requested = length & 0x80 == 0x80
           length &= 0x7f
           # impossible message
-          next if length < 11 || length > 32
+          next if length < 11 || length > 43
           # don't have enough data for what this message wants;
           # it could be garbage on the line so keep scanning
           next if length > data.length - offset
@@ -45,18 +49,15 @@ module SDN
           break
         end
 
-        puts "discarding invalid data prior to message #{data[0...offset].map { |b| '%02x' % b }.join(' ')}" unless offset == 0
-        puts "read #{data.slice(offset, length).map { |b| '%02x' % b }.join(' ')}"
-
-        reserved = to_number(data[offset + 2])
+        node_type = node_type_from_number(to_number(data[offset + 2]))
         src = transform_param(data.slice(offset + 3, 3))
         dest = transform_param(data.slice(offset + 6, 3))
         begin
-          result = message_class.new(reserved: reserved, ack_requested: ack_requested, src: src, dest: dest)
+          result = message_class.new(node_type: node_type, ack_requested: ack_requested, src: src, dest: dest)
           result.parse(data.slice(offset + 9, length - 11))
           result.msg = msg if message_class == UnknownMessage
         rescue ArgumentError => e
-          puts "discarding illegal message #{e}"
+          puts "discarding illegal message of type #{message_class.name}: #{e}"
           result = nil
         end
         [result, offset + length]
@@ -67,7 +68,7 @@ module SDN
       def message_map
         @message_map ||=
           @subclasses.inject({}) do |memo, klass|
-            next memo unless klass.constants.include?(:MSG)
+            next memo unless klass.constants(false).include?(:MSG)
             memo[klass.const_get(:MSG, false)] = klass
             memo
           end
@@ -77,13 +78,12 @@ module SDN
     include Helpers
     singleton_class.include Helpers
 
-    attr_reader :reserved, :ack_requested, :src, :dest
-    attr_writer :ack_requested
+    attr_accessor :node_type, :ack_requested, :src, :dest
 
-    def initialize(reserved: nil, ack_requested: false, src: nil, dest: nil)
-      @reserved = reserved || 0x02 # message sent to Sonesse 30
+    def initialize(node_type: nil, ack_requested: false, src: nil, dest: nil)
+      @node_type = node_type || 0
       @ack_requested = ack_requested
-      if src.nil? && is_group_address?(dest)
+      if src.nil? && !dest.nil? && is_group_address?(dest)
         src = dest
         dest = nil
       end
@@ -96,7 +96,7 @@ module SDN
     end
 
     def serialize
-      result = transform_param(reserved) + transform_param(src) + transform_param(dest) + params
+      result = transform_param(node_type_to_number(node_type)) + transform_param(src) + transform_param(dest) + params
       length = result.length + 4
       length |= 0x80 if ack_requested
       result = transform_param(self.class.const_get(:MSG)) + transform_param(length) + result
@@ -109,11 +109,11 @@ module SDN
     end
 
     def inspect
-      "#<%s @reserved=%02xh, @ack_requested=%s, @src=%s, @dest=%s%s>" % [self.class.name, reserved, ack_requested, print_address(src), print_address(dest), class_inspect]
+      "#<%s @node_type=%s, @ack_requested=%s, @src=%s, @dest=%s%s>" % [self.class.name, node_type_to_string(node_type), ack_requested, print_address(src), print_address(dest), class_inspect]
     end
 
     def class_inspect
-      ivars = instance_variables - [:@reserved, :@ack_requested, :@src, :@dest]
+      ivars = instance_variables - [:@node_type, :@ack_requested, :@src, :@dest, :@params]
       return if ivars.empty?
       ivars.map { |iv| ", #{iv}=#{instance_variable_get(iv).inspect}" }.join
     end
@@ -136,19 +136,36 @@ module SDN
     class Nack < Message
       MSG = 0x6f
       PARAMS_LENGTH = 1
-      VALUES = { data_error: 0x01, unknown_message: 0x10, node_is_locked: 0x20, wrong_position: 0x21, limits_not_set: 0x22, ip_not_set: 0x23, out_of_range: 0x24, busy: 0xff }
+      VALUES = { data_error: 0x01,
+                 unknown_message: 0x10,
+                 node_is_locked: 0x20,
+                 wrong_position: 0x21,
+                 limits_not_set: 0x22,
+                 ip_not_set: 0x23,
+                 out_of_range: 0x24,
+                 busy: 0xff }
+                 # 17 limits not set?
+                 # 37 not implemented? (get motor rolling speed)
+                 # 39 at limit? blocked?
+
 
       # presumed
       attr_accessor :error_code
 
+      def initialize(dest = nil, error_code = nil, **kwargs)
+        kwargs[:dest] ||= dest
+        super(**kwargs)
+        self.error_code = error_code
+      end
+
       def parse(params)
         super
         error_code = to_number(params[0])
-        self.error_code = VALUES[error_code] || error_code
+        self.error_code = VALUES.invert[error_code] || error_code
       end
     end
 
-    class Ack < Message
+    class Ack < SimpleRequest
       MSG = 0x7f
       PARAMS_LENGTH = 0
     end
@@ -157,9 +174,9 @@ module SDN
     class UnknownMessage < Message
       attr_accessor :msg, :params
 
-      def initialize(dest = nil, **kwargs)
-        kwargs[:dest] ||= dest
+      def initialize(params = [], **kwargs)
         super(**kwargs)
+        self.params = params
       end
 
       alias parse params=
@@ -171,8 +188,11 @@ module SDN
       end
 
       def class_inspect
-        result = ", @msg=%02xh" % msg if self.class == UnknownMessage
-        result ||= ""
+        result = if self.class == UnknownMessage
+          result = ", @msg=%02xh" % msg 
+        else
+          super || ""
+        end
         return result if params.empty?
 
         result << ", @params=#{params.map { |b| "%02x" % b }.join(' ')}"
@@ -186,5 +206,6 @@ require 'sdn/messages/get'
 require 'sdn/messages/post'
 require 'sdn/messages/set'
 require 'sdn/messages/ilt2/get'
+require 'sdn/messages/ilt2/master_control'
 require 'sdn/messages/ilt2/post'
 require 'sdn/messages/ilt2/set'

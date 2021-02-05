@@ -9,7 +9,7 @@ module SDN
       attr_reader :type, :target, :value
 
       def initialize(dest = nil, type = :delete, target = :up, value = nil, **kwargs)
-        kwargs[:dest] = dest
+        kwargs[:dest] ||= dest
         super(**kwargs)
         self.type = type
         self.target = target
@@ -175,7 +175,7 @@ module SDN
 
       attr_reader :group_index, :group_address
 
-      def initialize(dest = nil, group_index = 0, group_address = nil, **kwargs)
+      def initialize(dest = nil, group_index = 1, group_address = nil, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
         self.group_index = group_index
@@ -184,12 +184,12 @@ module SDN
 
       def parse(params)
         super
-        self.group_index = to_number(params[0])
+        self.group_index = to_number(params[0]) + 1
         self.group_address = transform_param(params[1..3])
       end
 
       def group_index=(value)
-        raise ArgumentError, "group_index is out of range" unless (0...16).include?(value)
+        raise ArgumentError, "group_index is out of range" unless (1..16).include?(value)
         @group_index = value
       end
 
@@ -198,7 +198,7 @@ module SDN
       end
 
       def params
-        transform_param(group_index) + transform_param(group_address || [0, 0, 0])
+        transform_param(group_index - 1) + transform_param(group_address || [0, 0, 0])
       end
 
       def class_inspect
@@ -208,7 +208,7 @@ module SDN
 
     class SetNodeLabel < Message
       MSG = 0x55
-      PARAMS_LENGTH = 16
+      MAX_LENGTH = 16
 
       attr_accessor :label
 
@@ -223,7 +223,22 @@ module SDN
       end
 
       def params
-        from_string(label, 16)
+        from_string(label, self.class::MAX_LENGTH)
+      end
+    end
+
+    class SetNetworkLock < Message
+      MSG = 0x16
+
+      attr_accessor :locked, :priority
+
+      def parse(params)
+        self.locked = to_number(params[0]) == 1 ? true : false
+        self.priority = to_number(params[1])
+      end
+
+      def params
+        transform_param(locked ? 1 : 0) + transform_param(priority)
       end
     end
   end

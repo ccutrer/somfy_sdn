@@ -1,12 +1,87 @@
 module SDN
   class Message
     module ILT2
-      class SetMotorSettings < UnknownMessage
-        MSG = 0x52
+      class SetNodeLabel < ::SDN::Message::SetNodeLabel
+        MAX_LENGTH = 32
       end
 
-      class SetMotorIP < UnknownMessage
+      class SetIRConfig < PostIRConfig
+        MSG = 0x59
+
+        def initialize(dest = nil, channels = nil, **kwargs)
+          kwargs[:dest] ||= dest
+          super(channels, **kwargs)
+        end
+      end
+
+      # the motor does not move, and just stores the new values
+      # flags of 1 is reverse direction, but you have to set it every time
+      class SetMotorSettings < UnknownMessage
+        MSG = 0x52
+        PARAMS_LENGTH = 5
+
+        attr_accessor :flags, :down_limit, :position_pulses
+
+        def initialize(dest = nil, flags = 0, down_limit = 0, position_pulses = 0, **kwargs)
+          kwargs[:dest] ||= dest
+          super(**kwargs)
+          self.flags = flags
+          self.down_limit = down_limit
+          self.position_pulses = position_pulses
+        end
+
+        def parse(params)
+          super
+          self.flags = to_number(params[0])
+          self.down_limit = to_number(params[1..2])
+          self.position_pulses = to_number(params[3..4])
+        end
+
+        def params
+          transform_param(flags) + from_number(down_limit, 2) + from_number(position_pulses, 2)
+        end
+        # reverse direction? fe fc ff ff ff
+        # adjust upper limit up 10 pulses ff f5 ff f5 ff
+        # adjust upper limit up 50 pulses ff e1 ff e1 ff
+        # adjust lower limit down 10 pulses ff f5 ff ff ff
+        # adjust lower limit down 50 pulses ff cd ff ff ff
+        # FF DD DD UU UU
+        # FF = flags?
+        # DD = down limit
+        # UU = up limit?
+      end
+
+      class SetMotorIP < Message
         MSG = 0x53
+        PARAMS_LENGTH = 3
+
+        attr_reader :ip, :value
+
+        def initialize(dest = nil, ip = 1, value = nil, **kwargs)
+          kwargs[:dest] ||= dest
+          super(**kwargs)
+          self.ip = ip
+          self.value = value
+        end
+
+        def parse(params)
+          super
+          self.ip = to_number(params[0]) + 1
+          self.value = to_number(params[1..2], nillable: true)
+        end
+
+        def ip=(value)
+          raise ArgumentError, "ip must be in range 1..16 or nil" unless ip.nil? || (1..16).include?(ip)
+          @ip = value
+        end
+
+        def value=(value)
+          @value = value &. & 0xffff
+        end
+
+        def params
+          transform_param(ip - 1) + from_number(value, 2)
+        end
       end
 
       class SetLockStatus < Message
@@ -20,9 +95,10 @@ module SDN
           unlock: 5
         }
 
+        # when target_type is down_limit, target is number of 10ms intervals it's still allowed to roll up
         attr_reader :target_type, :target, :priority
 
-        def initialize(dest = nil, target_type = :unlock, target = -1, priority = 1, **kwargs)
+        def initialize(dest = nil, target_type = :unlock, target = nil, priority = 1, **kwargs)
           kwargs[:dest] ||= dest
           super(**kwargs)
           self.target_type = target_type
@@ -70,8 +146,11 @@ module SDN
           ip: 4,
           next_ip_up: 5,
           next_ip_down: 6,
-          jog_up: 10,
-          jog_down: 11,
+          position_pulses: 8,
+          jog_up_ms: 10,
+          jog_down_ms: 11,
+          jog_up_pulses: 12,
+          jog_down_pulses: 13,
           position_percent: 16,
         }.freeze
 

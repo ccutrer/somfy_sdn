@@ -107,6 +107,20 @@ on your dongle:
 ![Bus Connection](doc/bus.jpg)
 ![RS-485 Dongle](doc/rs485dongle.jpg)
 
+For an ST50 ILT2 motor with an RJ9 connector, the pins are as follows:
+
+Pin 1: RS-485-
+Pin 2: GND
+Pin 3: +5VDC
+Pin 4: RS-485+
+
+For a newer LT50 motor with an RJ9 connector, crazily Somfy changed the pinout. The pins are as follows:
+
+Pin 1: RS-485+
+Pin 2: RS-485-
+Pin 3: +5VDC
+Pin 4: GND
+
 ## Related Projects
 
 These projects are all in various states, and may be more or less developed than this one in varying aspects.

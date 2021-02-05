@@ -1,3 +1,4 @@
+require 'sdn/client'
 require 'sdn/message'
 require 'sdn/mqtt_bridge'
 

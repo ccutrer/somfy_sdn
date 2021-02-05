@@ -32,7 +32,7 @@ module SDN
      end
 
      def duration=(value)
-        raise ArgumentError, "duration must be in range 0x0a to 0xff (#{value})" unless value && value >= 0x0a && value <= 0xff
+        raise ArgumentError, "duration must be in range 0x0a to 0xff (#{value})" if value && (value < 0x0a || value > 0xff)
         @duration = value
      end
 
@@ -149,6 +149,47 @@ module SDN
 
     class Wink < SimpleRequest
       MSG = 0x05
+    end
+
+    class Lock < Message
+      MSG = 0x06  
+      PARAMS_LENGTH = 5
+      TARGET_TYPE = { current: 0, up_limit: 1, down_limit: 2, ip: 4, unlock: 5, position_percent: 7 }
+
+      attr_reader :target_type, :target, :priority
+
+      def initialize(dest = nil, target_type = :unlock, target = nil, priority = 1, **kwargs)
+        kwargs[:dest] ||= dest
+        super(**kwargs)
+        self.target_type = target_type
+        self.target = target
+        self.priority = priority
+      end
+
+      def target_type=(value)
+        raise ArgumentError, "target_type must be one of :current, :up_limit, :down_limit, :ip, :unlock, or :position_percent" unless TARGET_TYPE.keys.include?(value)
+        @target_type = value
+      end
+
+      def target=(value)
+        @target = value&. & 0xffff
+      end
+
+      def priority=(value)
+        @priority = value & 0xff
+      end
+
+      def parse(params)
+        super
+        self.target_type = TARGET_TYPE.invert[to_number(params[0])]
+        target = to_number(params[1..2], nillable: true)
+        self.target = target
+        self.priority = to_number(params[3])
+      end
+
+      def params
+        transform_param(TARGET_TYPE[target_type]) + from_number(target, 2) + transform_param(priority) + transform_param(0)
+      end
     end
   end
 end
