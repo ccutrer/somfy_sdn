@@ -1,10 +1,46 @@
 # Somfy SDN Gem
 
-This gem is a Ruby library for interacting with Somfy RS-485 motorized shades,
-primarily ST/Sonesse 30 DC models. There is very little documentation on the
-protocol, and it has been further reverse engineered by various individuals,
-and by capturing traffic from a Somfy UAI+, and referencing the output of the
-Somfy SDN Frame Builder tool.
+This gem is a Ruby library for interacting with Somfy RS-485 motorized shades.
+Both older ST50 shades speaking ILT2 protocol and newer shades (ST30, LT50)
+are supported. There is very little documentation on the protocol, and it has
+been further reverse engineered by various individuals by various means:
+ * capturing traffic from a Somfy UAI+
+ * capturing traffic various Somfy configuration tools
+ * referencing the output of the Somfy SDN Frame Builder tool
+
+## Installation
+
+Install ruby first, then:
+
+```sh
+gem install somfy_sdn
+```
+
+## Provisioning
+
+A utility is provided to provision a motor (set a label, set up limits).
+
+It's likely easiest to connect directly to the shade you're going to provision,
+or you can connect to a full bus network, but you'll want to provide the address
+of the motor you want to configure if you do that.
+
+```sh
+provision_sdn /path/to/serial_port
+```
+
+```sh
+provision_sdn /path/to/serial_port AB.CD.EF
+```
+
+One major caveat is that for ILT2 motors, there's not a way to ask the motor
+if rotation direction has been reversed, but you need to know that in order
+to set limits. So it's recommended that if you need to reverse the motor,
+press reverse, then jog up. If it didn't reverse, jog back down to restore
+your initial position, hit lower case `r` to restore the position memory
+(relative to the limits), then use capital `R` instead of lowercase `r` to
+reverse direction without re-calculating position. This will get the
+provisioning utility to the point that it knows what direction the motor is
+running.
 
 ## MQTT/Homie Bridge
 
@@ -17,16 +53,11 @@ using a systemd Linux distribution, an example unit file is provided in
 Ruby installed):
 
 ```sh
-gem install somfy_sdn
 sudo curl https://github.com/ccutrer/somfy_sdn/raw/master/contrib/sdn_mqtt_bridge.service -L -o /etc/systemd/system/sdn_mqtt_bridge.service
 <modify the file to pass the correct URI to your MQTT server, and path to RS-485 device>
 sudo systemctl enable sdn_mqtt_bridge
 sudo systemctl start sdn_mqtt_bridge
 ```
-
-Serial ports over the network are also supported. Just give a URI like
-tcp://192.168.1.10:2217/ instead of a local device. Be sure to set up your
-server (like ser2net) to use 4800 baud, ODD.
 
 Once you have it connected and running, you'll like want to Publish `true` to
 `homie/sdn/discovery/discover/set` to kick off the discovery process and find
@@ -120,6 +151,39 @@ Pin 1: RS-485+
 Pin 2: RS-485-
 Pin 3: +5VDC
 Pin 4: GND
+
+## Non-local Serial Ports
+
+Serial ports over the network are also supported. Just give a URI like
+tcp://192.168.1.10:2000/ instead of a local device. Be sure to set up your
+server (like ser2net) to use 4800 baud, ODD. You can also use RFC2217 serial
+ports (allowing the serial connection parameters to be set automatically) with
+a URI like telnet://192.168.1.10:2217/. Finally, if you're really into hacking,
+you can automatically create a virtual serial port by specifying /dev/ptmx.
+It will print out the path for a newly created virtual serial port for another
+program to connect to. This can be useful for running the motor simulator,
+and having a Somfy utility connect to it to capture its traffic (in this case
+you'll probably be running the simulator on a Linux computer, and the Somfy
+software on a Windows computer, and you'll need to use com2com on the Windows
+side to create a virtual serial port of the network).
+
+## Motor Simulator
+
+*INCOMPLETE*. Run the simulator, and it will act like it's a motor. Useful
+for deciphering protocols.
+
+```sh
+sdn_simulator /path/to/serial_port AB.CD.EF
+```
+
+## Capturing Traffic
+
+To capture and print traffic from a live network (i.e. with a UAI+ or ZDMI attached),
+without sending to MQTT, just run the bridge with no URL for the MQTT connection:
+
+```sh
+sdn_mqtt_bridge "" /path/to/serial_port
+```
 
 ## Related Projects
 
