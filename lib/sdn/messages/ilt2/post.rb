@@ -30,6 +30,50 @@ module SDN
         end
       end
 
+      class PostLockStatus < Message
+        MSG = 0x6B
+        PARAMS_LENGTH = 1
+
+        attr_accessor :priority # 0 for not locked
+
+        def initialize(priority = nil, **kwargs)
+          super(**kwargs)
+          self.priority = priority
+        end
+
+        def parse(params)
+          super
+          self.current_lock_priority = to_number(params[0])
+        end
+
+        def params
+          transform_param(priority)
+        end
+      end
+
+      class PostMotorIP < Message
+        MSG = 0x63
+        PARAMS_LENGTH = 3
+
+        attr_accessor :ip, :position_pulses
+
+        def initialize(ip = nil, position_pulses = nil, **kwargs)
+          super(**kwargs)
+          self.ip = ip
+          self.position_pulses = position_pulses
+        end
+
+        def parse(params)
+          super
+          self.ip = to_number(params[0]) + 1
+          self.position_pulses = to_number(params[1..2], nillable: true)
+        end
+
+        def params
+          transform_param(ip - 1) + from_number(position_pulses, 2)
+        end
+      end
+
       class PostMotorPosition < Message
         MSG = 0x64
         PARAMS_LENGTH = 3
@@ -72,50 +116,6 @@ module SDN
 
         def params
           transform_param(0) + from_number(limit, 2)
-        end
-      end
-
-      class PostMotorIP < Message
-        MSG = 0x63
-        PARAMS_LENGTH = 3
-
-        attr_accessor :ip, :position_pulses
-
-        def initialize(ip = nil, position_pulses = nil, **kwargs)
-          super(**kwargs)
-          self.ip = ip
-          self.position_pulses = position_pulses
-        end
-
-        def parse(params)
-          super
-          self.ip = to_number(params[0]) + 1
-          self.position_pulses = to_number(params[1..2], nillable: true)
-        end
-
-        def params
-          transform_param(ip - 1) + from_number(position_pulses, 2)
-        end
-      end
-
-      class PostLockStatus < Message
-        MSG = 0x6B
-        PARAMS_LENGTH = 1
-
-        attr_accessor :priority # 0 for not locked
-
-        def initialize(priority = nil, **kwargs)
-          super(**kwargs)
-          self.priority = priority
-        end
-
-        def parse(params)
-          super
-          self.current_lock_priority = to_number(params[0])
-        end
-
-        def params
-          transform_param(priority)
         end
       end
 

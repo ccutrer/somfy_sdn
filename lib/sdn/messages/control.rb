@@ -1,5 +1,46 @@
 module SDN
   class Message
+    class Lock < Message
+      MSG = 0x06
+      PARAMS_LENGTH = 5
+      TARGET_TYPE = { current: 0, up_limit: 1, down_limit: 2, ip: 4, unlock: 5, position_percent: 7 }
+
+      attr_reader :target_type, :target, :priority
+
+      def initialize(dest = nil, target_type = :unlock, target = nil, priority = 1, **kwargs)
+        kwargs[:dest] ||= dest
+        super(**kwargs)
+        self.target_type = target_type
+        self.target = target
+        self.priority = priority
+      end
+
+      def target_type=(value)
+        raise ArgumentError, "target_type must be one of :current, :up_limit, :down_limit, :ip, :unlock, or :position_percent" unless TARGET_TYPE.keys.include?(value)
+        @target_type = value
+      end
+
+      def target=(value)
+        @target = value&. & 0xffff
+      end
+
+      def priority=(value)
+        @priority = value & 0xff
+      end
+
+      def parse(params)
+        super
+        self.target_type = TARGET_TYPE.invert[to_number(params[0])]
+        target = to_number(params[1..2], nillable: true)
+        self.target = target
+        self.priority = to_number(params[3])
+      end
+
+      def params
+        transform_param(TARGET_TYPE[target_type]) + from_number(target, 2) + transform_param(priority) + transform_param(0)
+      end
+    end
+
     # Move in momentary mode
     class Move < Message
       MSG = 0x01
@@ -48,18 +89,43 @@ module SDN
       end
     end
 
-    # Stop movement
-    class Stop < Message
-      MSG = 0x02
-      PARAMS_LENGTH = 1
+    # Move relative to current position
+    class MoveOf < Message
+      MSG = 0x04
+      PARAMS_LENGTH = 4
+      TARGET_TYPE = { next_ip: 0x00, previous_ip: 0x01, jog_down_pulses: 0x02, jog_up_pulses: 0x03, jog_down_ms: 0x04, jog_up_ms: 0x05 }
 
-      def initialize(dest = nil, **kwargs)
+      attr_reader :target_type, :target
+
+      def initialize(dest = nil, target_type = nil, target = nil, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
+        self.target_type = target_type
+        self.target = target
+      end
+
+      def parse(params)
+        super
+        self.target_type = TARGET_TYPE.invert[to_number(params[0])]
+        target = to_number(params[1..2], nillable: true)
+        target *= 10 if %I{jog_down_ms jog_up_ms}.include?(target_type)
+        self.target = target
+      end
+
+      def target_type=(value)
+        raise ArgumentError, "target_type must be one of :next_ip, :previous_ip, :jog_down_pulses, :jog_up_pulses, :jog_down_ms, :jog_up_ms" unless value.nil? || TARGET_TYPE.keys.include?(value)
+        @target_type = value
+      end
+
+      def target=(value)
+        value &= 0xffff if value
+        @target = value
       end
 
       def params
-        transform_param(0)
+        param = target || 0xffff
+        param /= 10 if %I{jog_down_ms jog_up_ms}.include?(target_type)
+        transform_param(TARGET_TYPE[target_type]) + from_number(param, 2) + transform_param(0)
       end
     end
 
@@ -107,89 +173,23 @@ module SDN
       end
     end
 
-    # Move relative to current position
-    class MoveOf < Message
-      MSG = 0x04
-      PARAMS_LENGTH = 4
-      TARGET_TYPE = { next_ip: 0x00, previous_ip: 0x01, jog_down_pulses: 0x02, jog_up_pulses: 0x03, jog_down_ms: 0x04, jog_up_ms: 0x05 }
+    # Stop movement
+    class Stop < Message
+      MSG = 0x02
+      PARAMS_LENGTH = 1
 
-      attr_reader :target_type, :target
-
-      def initialize(dest = nil, target_type = nil, target = nil, **kwargs)
+      def initialize(dest = nil, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
-        self.target_type = target_type
-        self.target = target
-      end
-
-      def parse(params)
-        super
-        self.target_type = TARGET_TYPE.invert[to_number(params[0])]
-        target = to_number(params[1..2], nillable: true)
-        target *= 10 if %I{jog_down_ms jog_up_ms}.include?(target_type)
-        self.target = target
-      end
-
-      def target_type=(value)
-        raise ArgumentError, "target_type must be one of :next_ip, :previous_ip, :jog_down_pulses, :jog_up_pulses, :jog_down_ms, :jog_up_ms" unless value.nil? || TARGET_TYPE.keys.include?(value)
-        @target_type = value
-      end
-
-      def target=(value)
-        value &= 0xffff if value
-        @target = value
       end
 
       def params
-        param = target || 0xffff
-        param /= 10 if %I{jog_down_ms jog_up_ms}.include?(target_type)
-        transform_param(TARGET_TYPE[target_type]) + from_number(param, 2) + transform_param(0)
+        transform_param(0)
       end
     end
 
     class Wink < SimpleRequest
       MSG = 0x05
-    end
-
-    class Lock < Message
-      MSG = 0x06  
-      PARAMS_LENGTH = 5
-      TARGET_TYPE = { current: 0, up_limit: 1, down_limit: 2, ip: 4, unlock: 5, position_percent: 7 }
-
-      attr_reader :target_type, :target, :priority
-
-      def initialize(dest = nil, target_type = :unlock, target = nil, priority = 1, **kwargs)
-        kwargs[:dest] ||= dest
-        super(**kwargs)
-        self.target_type = target_type
-        self.target = target
-        self.priority = priority
-      end
-
-      def target_type=(value)
-        raise ArgumentError, "target_type must be one of :current, :up_limit, :down_limit, :ip, :unlock, or :position_percent" unless TARGET_TYPE.keys.include?(value)
-        @target_type = value
-      end
-
-      def target=(value)
-        @target = value&. & 0xffff
-      end
-
-      def priority=(value)
-        @priority = value & 0xff
-      end
-
-      def parse(params)
-        super
-        self.target_type = TARGET_TYPE.invert[to_number(params[0])]
-        target = to_number(params[1..2], nillable: true)
-        self.target = target
-        self.priority = to_number(params[3])
-      end
-
-      def params
-        transform_param(TARGET_TYPE[target_type]) + from_number(target, 2) + transform_param(priority) + transform_param(0)
-      end
     end
   end
 end

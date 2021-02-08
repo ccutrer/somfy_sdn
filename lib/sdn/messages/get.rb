@@ -1,23 +1,34 @@
 module SDN
   class Message
-    class GetMotorPosition < SimpleRequest
-      MSG = 0x0c
-    end
+    class GetGroupAddr < Message
+      MSG = 0x41
+      PARAMS_LENGTH = 1
 
-    class GetMotorStatus < SimpleRequest
-      MSG = 0x0e
-    end
+      attr_reader :group_index
 
-    class GetMotorLimits < SimpleRequest
-      MSG = 0x21
+      def initialize(dest = nil, group_index = 1, **kwargs)
+        kwargs[:dest] ||= dest
+        super(**kwargs)
+        self.group_index = group_index
+      end
+
+      def parse(params)
+        super
+        self.group_index = to_number(params[0]) + 1
+      end
+
+      def group_index=(value)
+        raise ArgumentError, "group_index is out of range" unless (1..16).include?(value)
+        @group_index = value
+      end
+
+      def params
+        transform_param(group_index - 1)
+      end
     end
 
     class GetMotorDirection < SimpleRequest
       MSG = 0x22
-    end
-
-    class GetMotorRollingSpeed < SimpleRequest
-      MSG = 0x23
     end
 
     class GetMotorIP < Message
@@ -47,39 +58,24 @@ module SDN
       end
     end
 
-    class GetGroupAddr < Message
-      MSG = 0x41
-      PARAMS_LENGTH = 1
+    class GetMotorLimits < SimpleRequest
+      MSG = 0x21
+    end
 
-      attr_reader :group_index
+    class GetMotorPosition < SimpleRequest
+      MSG = 0x0c
+    end
 
-      def initialize(dest = nil, group_index = 1, **kwargs)
-        kwargs[:dest] ||= dest
-        super(**kwargs)
-        self.group_index = group_index
-      end
+    class GetMotorRollingSpeed < SimpleRequest
+      MSG = 0x23
+    end
 
-      def parse(params)
-        super
-        self.group_index = to_number(params[0]) + 1
-      end
-
-      def group_index=(value)
-        raise ArgumentError, "group_index is out of range" unless (1..16).include?(value)
-        @group_index = value
-      end
-
-      def params
-        transform_param(group_index - 1)
-      end
+    class GetMotorStatus < SimpleRequest
+      MSG = 0x0e
     end
 
     class GetNetworkLock < SimpleRequest
       MSG = 0x26
-    end
-
-    class GetNodeLabel < SimpleRequest
-      MSG = 0x45
     end
 
     class GetNodeAddr < Message
@@ -92,6 +88,14 @@ module SDN
       end
     end
 
+    class GetNodeAppVersion < SimpleRequest
+      MSG = 0x74
+    end
+
+    class GetNodeLabel < SimpleRequest
+      MSG = 0x45
+    end
+
     class GetNodeSerialNumber < SimpleRequest
       MSG = 0x4c
     end
@@ -99,10 +103,5 @@ module SDN
     class GetNodeStackVersion < SimpleRequest
       MSG = 0x70
     end
-
-    class GetNodeAppVersion < SimpleRequest
-      MSG = 0x74
-    end
-
   end
 end

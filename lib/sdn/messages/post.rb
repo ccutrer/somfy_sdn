@@ -1,5 +1,94 @@
 module SDN
   class Message
+    class PostGroupAddr < Message
+      MSG = 0x61
+      PARAMS_LENGTH = 4
+
+      def initialize(group_index = nil, group_address = nil, **kwargs)
+        super(**kwargs)
+        self.group_index = group_index
+        self.group_address = group_address
+      end
+
+      attr_accessor :group_index, :group_address
+
+      def parse(params)
+        super
+        self.group_index = to_number(params[0]) + 1
+        self.group_address = transform_param(params[1..3])
+        self.group_address = nil if group_address == [0, 0, 0] || group_address == [0x01, 0x01, 0xff]
+      end
+
+      def params
+        from_number(group_index - 1) + transform_param(group_address || [0, 0, 0])
+      end
+
+      def class_inspect
+        ", group_index=#{group_index.inspect}, group_address=#{group_address ? print_address(group_address) : 'nil'}"
+      end
+    end
+
+    class PostMotorDirection < Message
+      MSG = 0x32
+      PARAMS_LENGTH = 1
+      DIRECTION = { standard: 0x00, reversed: 0x01 }.freeze
+
+      attr_accessor :direction
+
+      def parse(params)
+        super
+        self.direction = DIRECTION.invert[to_number(params[0])]
+      end
+    end
+
+    class PostMotorIP < Message
+      MSG = 0x35
+      PARAMS_LENGTH = 4
+
+      attr_accessor :ip, :position_pulses, :position_percent
+
+      def initialize(ip = nil, position_pulses = nil, position_percent = nil, **kwargs)
+        super(**kwargs)
+        self.ip = ip
+        self.position_pulses = position_pulses
+        self.position_percent = position_percent
+      end
+
+      def parse(params)
+        super
+        self.ip = to_number(params[0])
+        self.position_pulses = to_number(params[1..2], nillable: true)
+        self.position_percent = to_number(params[3], nillable: true)
+      end
+
+      def params
+        from_number(ip) + from_number(position_pulses, 2) + from_number(position_percent)
+      end
+    end
+
+    class PostMotorLimits < Message
+      MSG = 0x31
+      PARAMS_LENGTH = 4
+
+      attr_accessor :up_limit, :down_limit
+
+      def initialize(up_limit = nil, down_limit = nil, **kwargs)
+        super(**kwargs)
+        self.up_limit = up_limit
+        self.down_limit = down_limit
+      end
+
+      def parse(params)
+        super
+        self.up_limit = to_number(params[0..1], nillable: true)
+        self.down_limit = to_number(params[2..3], nillable: true)
+      end
+
+      def params
+        from_number(up_limit, 2) + from_number(down_limit, 2)
+      end
+    end
+
     class PostMotorPosition < Message
       MSG = 0x0d
       PARAMS_LENGTH = 5
@@ -22,6 +111,21 @@ module SDN
 
       def params
         from_number(position_pulses, 2) + from_number(position_percent) + from_number(ip)
+      end
+    end
+
+    class PostMotorRollingSpeed < Message
+      MSG = 0x33
+      PARAMS_LENGTH = 6
+
+      attr_accessor :up_speed, :down_speed, :slow_speed
+
+      def parse(params)
+        super
+        self.up_speed = to_number(params[0])
+        self.down_speed = to_number(params[1])
+        self.slow_speed = to_number(params[2])
+        # 3 ignored params
       end
     end
 
@@ -53,82 +157,6 @@ module SDN
       end
     end
 
-    class PostMotorLimits < Message
-      MSG = 0x31
-      PARAMS_LENGTH = 4
-
-      attr_accessor :up_limit, :down_limit
-
-      def initialize(up_limit = nil, down_limit = nil, **kwargs)
-        super(**kwargs)
-        self.up_limit = up_limit
-        self.down_limit = down_limit
-      end
-
-      def parse(params)
-        super
-        self.up_limit = to_number(params[0..1], nillable: true)
-        self.down_limit = to_number(params[2..3], nillable: true)
-      end
-
-      def params
-        from_number(up_limit, 2) + from_number(down_limit, 2)
-      end
-    end
-
-    class PostMotorDirection < Message
-      MSG = 0x32
-      PARAMS_LENGTH = 1
-      DIRECTION = { standard: 0x00, reversed: 0x01 }.freeze
-
-      attr_accessor :direction
-
-      def parse(params)
-        super
-        self.direction = DIRECTION.invert[to_number(params[0])]
-      end
-    end
-
-    class PostMotorRollingSpeed < Message
-      MSG = 0x33
-      PARAMS_LENGTH = 6
-
-      attr_accessor :up_speed, :down_speed, :slow_speed
-
-      def parse(params)
-        super
-        self.up_speed = to_number(params[0])
-        self.down_speed = to_number(params[1])
-        self.slow_speed = to_number(params[2])
-        # 3 ignored params
-      end
-    end
-
-    class PostMotorIP < Message
-      MSG = 0x35
-      PARAMS_LENGTH = 4
-
-      attr_accessor :ip, :position_pulses, :position_percent
-
-      def initialize(ip = nil, position_pulses = nil, position_percent = nil, **kwargs)
-        super(**kwargs)
-        self.ip = ip
-        self.position_pulses = position_pulses
-        self.position_percent = position_percent
-      end
-
-      def parse(params)
-        super
-        self.ip = to_number(params[0])
-        self.position_pulses = to_number(params[1..2], nillable: true)
-        self.position_percent = to_number(params[3], nillable: true)
-      end
-
-      def params
-        from_number(ip) + from_number(position_pulses, 2) + from_number(position_percent)
-      end
-    end
-
     class PostNetworkLock < UnknownMessage
       MSG = 0x36
       PARAMS_LENGTH = 5
@@ -143,31 +171,18 @@ module SDN
       PARAMS_LENGTH = 0
     end
 
-    class PostGroupAddr < Message
-      MSG = 0x61
-      PARAMS_LENGTH = 4
+    class PostNodeAppVersion < Message
+      MSG = 0x75
+      PARAMS_LENGTH = 6
 
-      def initialize(group_index = nil, group_address = nil, **kwargs)
-        super(**kwargs)
-        self.group_index = group_index
-        self.group_address = group_address
-      end
-
-      attr_accessor :group_index, :group_address
+      attr_accessor :reference, :index_letter, :index_number, :profile
 
       def parse(params)
         super
-        self.group_index = to_number(params[0]) + 1
-        self.group_address = transform_param(params[1..3])
-        self.group_address = nil if group_address == [0, 0, 0] || group_address == [0x01, 0x01, 0xff]
-      end
-
-      def params
-        from_number(group_index - 1) + transform_param(group_address || [0, 0, 0])
-      end
-
-      def class_inspect
-        ", group_index=#{group_index.inspect}, group_address=#{group_address ? print_address(group_address) : 'nil'}"
+        self.reference = to_number(params[0..2])
+        self.index_letter = to_string(params[3..3])
+        self.index_number = transform_param(params[4])
+        self.profile = transform_param(params[5])
       end
     end
 
@@ -203,21 +218,6 @@ module SDN
 
       def parse(params)
         @serial_number = to_string(params)
-      end
-    end
-
-    class PostNodeAppVersion < Message
-      MSG = 0x75
-      PARAMS_LENGTH = 6
-
-      attr_accessor :reference, :index_letter, :index_number, :profile
-
-      def parse(params)
-        super
-        self.reference = to_number(params[0..2])
-        self.index_letter = to_string(params[3..3])
-        self.index_number = transform_param(params[4])
-        self.profile = transform_param(params[5])
       end
     end
 

@@ -11,23 +11,24 @@ module SDN
             # no clue what's special about these
             return unless data[0..1] == [0xfa, 0x7a]
             klass = case data[2]
+              when 0x00; Down
               when 0xfa; Up
               when 0xff; Stop
-              when 0x00; Down
               end
             return unless klass
             [klass.new, 5]
           end
         end
 
-        class Up < MasterControl
-        end
-  
         class Down < MasterControl
         end
-  
+
         class Stop < MasterControl
         end
+ 
+        class Up < MasterControl
+        end
+
       end
     end
   end

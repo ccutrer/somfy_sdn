@@ -5,12 +5,8 @@ module SDN
         MSG = 0x49
       end
 
-      class GetMotorPosition < SimpleRequest
-        MSG = 0x44
-      end
-
-      class GetMotorSettings < SimpleRequest
-        MSG = 0x42
+      class GetLockStatus < SimpleRequest
+        MSG = 0x4b
       end
 
       class GetMotorIP < Message
@@ -40,8 +36,12 @@ module SDN
         end
       end
 
-      class GetLockStatus < SimpleRequest
-        MSG = 0x4b
+      class GetMotorPosition < SimpleRequest
+        MSG = 0x44
+      end
+
+      class GetMotorSettings < SimpleRequest
+        MSG = 0x42
       end
     end
   end
