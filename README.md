@@ -8,6 +8,9 @@ been further reverse engineered by various individuals by various means:
  * capturing traffic various Somfy configuration tools
  * referencing the output of the Somfy SDN Frame Builder tool
 
+If you're really just interested in the protocol, and not this library or
+utilities, take a look at [the protocol reference](doc/protocol.md).
+
 ## Installation
 
 Install ruby first, then:
