@@ -1,4 +1,4 @@
-require 'sdn/messages/helpers'
+require 'sdn/message/helpers'
 
 module SDN
   class MalformedMessage < RuntimeError; end
@@ -201,11 +201,11 @@ module SDN
   end
 end
 
-require 'sdn/messages/control'
-require 'sdn/messages/get'
-require 'sdn/messages/post'
-require 'sdn/messages/set'
-require 'sdn/messages/ilt2/get'
-require 'sdn/messages/ilt2/master_control'
-require 'sdn/messages/ilt2/post'
-require 'sdn/messages/ilt2/set'
+require 'sdn/message/control'
+require 'sdn/message/get'
+require 'sdn/message/post'
+require 'sdn/message/set'
+require 'sdn/message/ilt2/get'
+require 'sdn/message/ilt2/master_control'
+require 'sdn/message/ilt2/post'
+require 'sdn/message/ilt2/set'
