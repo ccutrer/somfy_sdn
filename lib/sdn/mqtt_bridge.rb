@@ -133,11 +133,9 @@ module SDN
 
     def initialize(mqtt_uri, port, device_id: "somfy", base_topic: "homie")
       @base_topic = "#{base_topic}/#{device_id}"
-      unless mqtt_uri.empty?
-        @mqtt = MQTT::Client.new(mqtt_uri)
-        @mqtt.set_will("#{@base_topic}/$state", "lost", true)
-        @mqtt.connect
-      end
+      @mqtt = MQTT::Client.new(mqtt_uri)
+      @mqtt.set_will("#{@base_topic}/$state", "lost", true)
+      @mqtt.connect
 
       @motors = {}
       @groups = {}
@@ -148,7 +146,7 @@ module SDN
       @response_pending = false
       @broadcast_pending = false
 
-      publish_basic_attributes if @mqtt
+      publish_basic_attributes
 
       @sdn = SDN::Client.new(port)
 
@@ -159,12 +157,11 @@ module SDN
               src = SDN::Message.print_address(message.src)
               # ignore the UAI Plus and ourselves
               if src != '7F.7F.7F' && !SDN::Message::is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
-                motor = publish_motor(src.gsub('.', '')) if @mqtt
+                motor = publish_motor(src.gsub('.', ''))
                 puts "found new motor #{src}"
               end
 
               puts "read #{message.inspect}"
-              next unless @mqtt
               follow_ups = []
               case message
               when SDN::Message::PostNodeLabel
@@ -301,10 +298,6 @@ module SDN
           puts "failure writing: #{e}"
           exit 1
         end
-      end
-
-      unless @mqtt
-        loop { sleep 600 }
       end
 
       @mqtt.get do |topic, value|

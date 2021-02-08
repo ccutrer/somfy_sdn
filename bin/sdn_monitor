@@ -1,0 +1,9 @@
+#!/usr/bin/env ruby
+
+sdn = SDN::Client.new(ARGV[0])
+
+loop do
+  sdn.receive do |message|
+    puts "Received message #{message.inspect}"
+  end
+end
