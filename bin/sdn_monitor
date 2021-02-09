@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+require 'somfy_sdn'
+
 sdn = SDN::Client.new(ARGV[0])
 
 loop do
