@@ -50,7 +50,7 @@ module SDN
       end
 
       def publish(topic, value)
-        @mqtt.publish("#{@base_topic}/#{topic}", value, true)
+        @mqtt.publish("#{@base_topic}/#{topic}", value, true, 1)
       end
 
       def subscribe(topic)
@@ -71,17 +71,17 @@ module SDN
         publish("$homie", "v4.0.0")
         publish("$name", "Somfy SDN Network")
         publish("$state", "init")
-        publish("$nodes", "bridge")
+        publish("$nodes", "ffffff")
 
-        publish("bridge/$name", "Discovery Node")
-        publish("bridge/$type", "sdn")
-        publish("bridge/$properties", "discover")
+        publish("ffffff/$name", "Broadcast")
+        publish("ffffff/$type", "sdn")
+        publish("ffffff/$properties", "discover")
 
-        publish("bridge/discover/$name", "Trigger Motor Discovery")
-        publish("bridge/discover/$datatype", "enum")
-        publish("bridge/discover/$format", "discover")
-        publish("bridge/discover/$settable", "true")
-        publish("bridge/discover/$retained", "false")
+        publish("ffffff/discover/$name", "Trigger Motor Discovery")
+        publish("ffffff/discover/$datatype", "enum")
+        publish("ffffff/discover/$format", "discover")
+        publish("ffffff/discover/$settable", "true")
+        publish("ffffff/discover/$retained", "false")
 
         subscribe("+/discover/set")
         subscribe("+/label/set")
@@ -156,7 +156,7 @@ module SDN
 
         publish("#{addr}/control/$name", "Control motor")
         publish("#{addr}/control/$datatype", "enum")
-        publish("#{addr}/control/$format", "up,down,stop,wink,next_ip,previous_ip")
+        publish("#{addr}/control/$format", "up,down,stop,wink,next_ip,previous_ip,refresh")
         publish("#{addr}/control/$settable", "true")
         publish("#{addr}/control/$retained", "false")
 
@@ -267,7 +267,7 @@ module SDN
 
         motor = Motor.new(self, addr, node_type)
         @motors[addr] = motor
-        publish("$nodes", (["bridge"] + @motors.keys.sort + @groups.keys.sort).join(","))
+        publish("$nodes", (["ffffff"] + @motors.keys.sort + @groups.keys.sort).join(","))
 
         sdn_addr = Message.parse_address(addr)
         @mutex.synchronize do
@@ -309,7 +309,7 @@ module SDN
 
         publish("#{addr}/control/$name", "Control motors")
         publish("#{addr}/control/$datatype", "enum")
-        publish("#{addr}/control/$format", "up,down,stop,wink,next_ip,previous_ip")
+        publish("#{addr}/control/$format", "up,down,stop,wink,next_ip,previous_ip,refresh")
         publish("#{addr}/control/$settable", "true")
         publish("#{addr}/control/$retained", "false")
 
@@ -352,7 +352,7 @@ module SDN
         publish("#{addr}/motors/$datatype", "string")
 
         group = @groups[addr] = Group.new(self, addr)
-        publish("$nodes", (["bridge"] + @motors.keys.sort + @groups.keys.sort).join(","))
+        publish("$nodes", (["ffffff"] + @motors.keys.sort + @groups.keys.sort).join(","))
         group
       end
     end

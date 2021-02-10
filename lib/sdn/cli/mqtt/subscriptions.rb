@@ -4,13 +4,7 @@ module SDN
       module Subscriptions
         def handle_message(topic, value)
           puts "got #{value.inspect} at #{topic}"
-          if topic == "#{@base_topic}/bridge/discover/set" && value == "discover"
-            # trigger discovery
-            @mutex.synchronize do
-              @queues[2].push(MessageAndRetries.new(Message::GetNodeAddr.new, 1, 2))
-              @cond.signal
-            end
-          elsif (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>discover|label|control|jog-(?<jog_type>pulses|ms)|position-pulses|position-percent|ip|reset|(?<speed_type>up-speed|down-speed|slow-speed)|up-limit|down-limit|direction|ip(?<ip>\d+)-(?<ip_type>pulses|percent)|groups)/set$}))
+          if (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>discover|label|control|jog-(?<jog_type>pulses|ms)|position-pulses|position-percent|ip|reset|(?<speed_type>up-speed|down-speed|slow-speed)|up-limit|down-limit|direction|ip(?<ip>\d+)-(?<ip_type>pulses|percent)|groups)/set$}))
             addr = Message.parse_address(match[:addr])
             property = match[:property]
             # not homie compliant; allows linking the position-percent property
@@ -30,7 +24,14 @@ module SDN
             message = case property
               when 'discover'
                 follow_up = nil
-                Message::GetNodeAddr.new(addr) if value == "discover"
+                if value == "discover"
+                  # discovery is low priority, and longer timeout
+                  @mutex.synchronize do
+                    @queues[2].push(MessageAndRetries.new(Message::GetNodeAddr.new(addr), 1, 2))
+                    @cond.signal
+                  end
+                end
+                nil
               when 'label'
                 follow_up = Message::GetNodeLabel.new(addr)
                 ns::SetNodeLabel.new(addr, value) unless is_group
@@ -49,6 +50,10 @@ module SDN
                     Message::MoveOf.new(addr, :previous_ip)
                 when 'wink'
                   Message::Wink.new(addr)
+                when 'refresh'
+                  follow_up = nil
+                  (motor&.node_type == :st50ilt2 ? ns::GetMotorPosition : Message::GetMotorStatus).
+                    new(addr)
                 end
               when /jog-(?:pulses|ms)/
                 value = value.to_i

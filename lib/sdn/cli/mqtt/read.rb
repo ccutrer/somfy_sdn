@@ -34,7 +34,7 @@ module SDN
                     motor.last_position_pulses = motor.position_pulses
                     ip = (1..16).find do |i|
                       # divide by 5 for some leniency
-                      motor["ip#{i}_pulses"] / 5 == message.position_pulses / 5
+                      motor["ip#{i}_pulses"].to_i / 5 == message.position_pulses / 5
                     end
                     motor.publish(:ip, ip)
                   end
