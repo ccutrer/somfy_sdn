@@ -1,3 +1,5 @@
+require 'io/wait'
+
 module SDN
   class Client
     def initialize(port)
@@ -18,7 +20,7 @@ module SDN
         io
       else
         require 'ccutrer-serialport'
-        CCutrer::SerialPort.new(port, baud: 4800, parity: :odd)
+        CCutrer::SerialPort.new(port, baud: 4800, data_bits: 8, parity: :odd, stop_bits: 1)
       end
       @buffer = ""
     end
@@ -33,11 +35,11 @@ module SDN
       receive(1)
     end
 
-    def ensure(message, expected_response = nil)
+    def ensure(message)
       loop do
         messages = transact(message)
         next if messages.empty?
-        next if expected_response && !messages.first.is_a?(expected_response)
+        next unless message.expected_response?(messages.first)
         return messages.first
       end
     end
@@ -48,7 +50,7 @@ module SDN
       messages = []
 
       loop do
-        message, bytes_read = SDN::Message.parse(@buffer.bytes)
+        message, bytes_read = Message.parse(@buffer.bytes)
         # discard how much we read
         @buffer = @buffer[bytes_read..-1]
         unless message

@@ -129,6 +129,9 @@ module SDN
           if target_type == :position_percent
             target = target.to_f / 255 * 100
           end
+          if target_type == :ip
+            target += 1
+          end
           self.target = target
         end
 
@@ -148,6 +151,7 @@ module SDN
         def params
           param = target
           param = (param * 255 / 100).to_i if target_type == :position_percent
+          param -= 1 if target_type == :ip
           transform_param(TARGET_TYPE[target_type]) + from_number(param, 2)
         end
       end

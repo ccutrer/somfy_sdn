@@ -35,8 +35,8 @@ The basic message structure is as follows:
  * Additional parameters are dependent on the message type.
  * The checksum is two bytes, a simple sum of all preceding bytes, stored big endian.
 
- When written/read on the wire, every byte in the message is subtracted from 0xFF. The serial parameters are 9600,8O1 i.e.
- 9600 baud, 8 data bits, odd parity, 1 stop bit.
+ When written/read on the wire, every byte in the message is subtracted from 0xFF. The serial parameters are 4800,8O1 i.e.
+ 4800 baud, 8 data bits, odd parity, 1 stop bit.
 
 
 Italicized messages in the following tables are not implemented by this library.

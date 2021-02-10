@@ -13,10 +13,11 @@ Gem::Specification.new do |s|
   s.executables = ['sdn_mqtt_bridge']
   s.files = Dir["{bin,lib}/**/*"]
 
+  s.add_dependency 'ccutrer-serialport', "~> 1.0"
   s.add_dependency 'curses', "~> 1.4"
   s.add_dependency 'mqtt', "~> 0.5.0"
   s.add_dependency 'net-telnet-rfc2217', "~> 0.0.3"
-  s.add_dependency 'ccutrer-serialport', "~> 1.0"
+  s.add_dependency 'thor', "~> 1.1"
 
   s.add_development_dependency 'byebug', "~> 9.0"
   s.add_development_dependency 'rake', "~> 13.0"

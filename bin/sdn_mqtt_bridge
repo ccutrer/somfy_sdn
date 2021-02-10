@@ -1,5 +1,0 @@
-#!/usr/bin/env ruby
-
-require 'somfy_sdn'
-
-SDN::MQTTBridge.new(ARGV[0], ARGV[1])

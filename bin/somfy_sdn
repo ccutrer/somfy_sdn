@@ -1,0 +1,42 @@
+#!/usr/bin/env ruby
+
+require 'somfy_sdn'
+require 'thor'
+
+class SomfySDNCLI < Thor
+  desc "monitor PORT", "Monitor traffic on the SDN network at PORT"
+  def monitor(port)
+    sdn = SDN::Client.new(port)
+
+    loop do
+      sdn.receive do |message|
+        puts "Received message #{message.inspect}"
+      end
+    end
+  end
+
+  desc "mqtt PORT MQTT_URI", "Run an MQTT bridge to control the SDN network at PORT"
+  option :"device-id", default: "somfy", desc: "The Homie Device ID"
+  option :"base-topic", default: "homie", desc: "The base Homie topic"
+  def mqtt(port, mqtt_uri)
+    require 'sdn/cli/mqtt'
+
+    SDN::CLI::MQTT.new(port, mqtt_uri,
+      device_id: options["device-id"],
+      base_topic: options["base-topic"])
+  end
+
+  desc "provision PORT [ADDRESS]", "Provision a motor (label and set limits) at PORT"
+  def provision(port, address = nil)
+    require 'sdn/cli/provisioner'
+    SDN::CLI::Provisioner.new(port, address)
+  end
+
+  desc "simulator PORT [ADDRESS]", "Simulate a motor (for debugging purposes) at PORT"
+  def simulator(port, address = nil)
+    require 'sdn/cli/simulator'
+    SDN::CLI::Simulator.new(port, address)
+  end
+end
+
+SomfySDNCLI.start(ARGV)   

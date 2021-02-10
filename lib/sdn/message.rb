@@ -11,11 +11,11 @@ module SDN
         (@subclasses ||= []) << klass
       end
 
-      def expected_response
+      def expected_response?(message)
         if name =~ /::Get([A-Za-z]+)/
-          const_get("Post#{$1}", true)
+          message.class.name == name.sub("::Get", "::Post")
         else
-          Ack
+          message.is_a?(Ack) || message.is_a?(Nack)
         end
       end
 
