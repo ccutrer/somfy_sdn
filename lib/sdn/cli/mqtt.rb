@@ -71,17 +71,17 @@ module SDN
         publish("$homie", "v4.0.0")
         publish("$name", "Somfy SDN Network")
         publish("$state", "init")
-        publish("$nodes", "ffffff")
+        publish("$nodes", "FFFFFF")
 
-        publish("ffffff/$name", "Broadcast")
-        publish("ffffff/$type", "sdn")
-        publish("ffffff/$properties", "discover")
+        publish("FFFFFF/$name", "Broadcast")
+        publish("FFFFFF/$type", "sdn")
+        publish("FFFFFF/$properties", "discover")
 
-        publish("ffffff/discover/$name", "Trigger Motor Discovery")
-        publish("ffffff/discover/$datatype", "enum")
-        publish("ffffff/discover/$format", "discover")
-        publish("ffffff/discover/$settable", "true")
-        publish("ffffff/discover/$retained", "false")
+        publish("FFFFFF/discover/$name", "Trigger Motor Discovery")
+        publish("FFFFFF/discover/$datatype", "enum")
+        publish("FFFFFF/discover/$format", "discover")
+        publish("FFFFFF/discover/$settable", "true")
+        publish("FFFFFF/discover/$retained", "false")
 
         subscribe("+/discover/set")
         subscribe("+/label/set")
@@ -267,7 +267,7 @@ module SDN
 
         motor = Motor.new(self, addr, node_type)
         @motors[addr] = motor
-        publish("$nodes", (["ffffff"] + @motors.keys.sort + @groups.keys.sort).join(","))
+        publish("$nodes", (["FFFFFF"] + @motors.keys.sort + @groups.keys.sort).join(","))
 
         sdn_addr = Message.parse_address(addr)
         @mutex.synchronize do
@@ -352,7 +352,7 @@ module SDN
         publish("#{addr}/motors/$datatype", "string")
 
         group = @groups[addr] = Group.new(self, addr)
-        publish("$nodes", (["ffffff"] + @motors.keys.sort + @groups.keys.sort).join(","))
+        publish("$nodes", (["FFFFFF"] + @motors.keys.sort + @groups.keys.sort).join(","))
         group
       end
     end
