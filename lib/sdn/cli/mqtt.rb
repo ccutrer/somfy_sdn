@@ -122,12 +122,12 @@ module SDN
           ip
           down-limit
           groups
+          last-direction
         } + (1..16).map { |ip| ["ip#{ip}-pulses", "ip#{ip}-percent"] }.flatten
 
         unless node_type == :st50ilt2
           properties.concat %w{
             reset
-            last-direction
             last-action-source
             last-action-cause
             up-limit
@@ -198,16 +198,16 @@ module SDN
         publish("#{addr}/down-limit/$unit", "pulses")
         publish("#{addr}/down-limit/$settable", "true")
 
+        publish("#{addr}/last-direction/$name", "Direction of last motion")
+        publish("#{addr}/last-direction/$datatype", "enum")
+        publish("#{addr}/last-direction/$format", Message::PostMotorStatus::DIRECTION.keys.join(','))
+
         unless node_type == :st50ilt2
           publish("#{addr}/reset/$name", "Recall factory settings")
           publish("#{addr}/reset/$datatype", "enum")
           publish("#{addr}/reset/$format", Message::SetFactoryDefault::RESET.keys.join(','))
           publish("#{addr}/reset/$settable", "true")
           publish("#{addr}/reset/$retained", "false")
-
-          publish("#{addr}/last-direction/$name", "Direction of last motion")
-          publish("#{addr}/last-direction/$datatype", "enum")
-          publish("#{addr}/last-direction/$format", Message::PostMotorStatus::DIRECTION.keys.join(','))
 
           publish("#{addr}/last-action-source/$name", "Source of last action")
           publish("#{addr}/last-action-source/$datatype", "enum")

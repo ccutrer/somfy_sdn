@@ -29,6 +29,9 @@ module SDN
                       motor.publish(:state, :stopped)
                     else
                       motor.publish(:state, :running)
+                      if motor.position_pulses && motor.position_pulses != message.position_pulses
+                        motor.publish(:last_direction, motor.position_pulses < message.position_pulses ? :down : :up)
+                      end
                       follow_ups << Message::ILT2::GetMotorPosition.new(message.src)
                     end
                     motor.last_position_pulses = motor.position_pulses
