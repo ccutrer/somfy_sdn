@@ -50,7 +50,7 @@ module SDN
       end
 
       def publish(topic, value)
-        @mqtt.publish("#{@base_topic}/#{topic}", value, true, 1)
+        @mqtt.publish("#{@base_topic}/#{topic}", value, true, 0)
       end
 
       def subscribe(topic)
