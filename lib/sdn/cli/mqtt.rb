@@ -57,9 +57,9 @@ module SDN
         @mqtt.subscribe("#{@base_topic}/#{topic}")
       end
 
-      def enqueue(message, queue = :command)
+      def enqueue(message, queue = 0)
         @mutex.synchronize do
-          queue = instance_variable_get(:"#{@queue}_queue")
+          queue = @queues[queue]
           unless queue.include?(message)
             queue.push(message)
             @cond.signal

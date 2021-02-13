@@ -18,7 +18,7 @@ module SDN
         def process
           loop do
             @client.receive do |message|
-              puts "Received #{message.inspect}"
+              SDN.logger.info "Received #{message.inspect}"
               next unless message.is_a?(Message::ILT2::MasterControl) ||
                 message.dest == address ||
                 message.dest == BROADCAST_ADDRESS
@@ -178,7 +178,7 @@ module SDN
           message.src = address
           message.node_type = node_type
           message.dest = dest
-          puts "Sending #{message.inspect}"
+          SDN.logger.info "Sending #{message.inspect}"
           @client.send(message)
         end
       end

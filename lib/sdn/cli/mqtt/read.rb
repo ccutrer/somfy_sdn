@@ -6,14 +6,15 @@ module SDN
           loop do
             begin
               @sdn.receive do |message|
+                SDN.logger.info "read #{message.inspect}"
+
                 src = Message.print_address(message.src)
                 # ignore the UAI Plus and ourselves
                 if src != '7F.7F.7F' && !Message.is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
+                  SDN.logger.info "found new motor #{src}"
                   motor = publish_motor(src.gsub('.', ''), message.node_type)
-                  puts "found new motor #{src}"
                 end
 
-                puts "read #{message.inspect}"
                 follow_ups = []
                 case message
                 when Message::PostNodeLabel
@@ -136,12 +137,12 @@ module SDN
                   @cond.signal if signal
                 end
               rescue EOFError
-                puts "EOF reading"
+                SDN.logger.fatal "EOF reading"
                 exit 2
               rescue MalformedMessage => e
-                puts "ignoring malformed message: #{e}" unless e.to_s =~ /issing data/
+                SDN.logger.warn "ignoring malformed message: #{e}" unless e.to_s =~ /issing data/
               rescue => e
-                puts "got garbage: #{e}; #{e.backtrace}"
+                SDN.logger.error "got garbage: #{e}; #{e.backtrace}"
               end
             end
           end

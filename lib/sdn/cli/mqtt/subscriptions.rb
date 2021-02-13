@@ -3,7 +3,7 @@ module SDN
     class MQTT
       module Subscriptions
         def handle_message(topic, value)
-          puts "got #{value.inspect} at #{topic}"
+          SDN.logger.info "got #{value.inspect} at #{topic}"
           if (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>discover|label|control|jog-(?<jog_type>pulses|ms)|position-pulses|position-percent|ip|reset|(?<speed_type>up-speed|down-speed|slow-speed)|up-limit|down-limit|direction|ip(?<ip>\d+)-(?<ip_type>pulses|percent)|groups)/set$}))
             addr = Message.parse_address(match[:addr])
             property = match[:property]
@@ -26,10 +26,7 @@ module SDN
                 follow_up = nil
                 if value == "discover"
                   # discovery is low priority, and longer timeout
-                  @mutex.synchronize do
-                    @queues[2].push(MessageAndRetries.new(Message::GetNodeAddr.new(addr), 1, 2))
-                    @cond.signal
-                  end
+                  enqueue(2, MessageAndRetries.new(Message::GetNodeAddr.new(addr), 1, 2))
                 end
                 nil
               when 'label'
@@ -130,10 +127,7 @@ module SDN
                 return if is_group
                 return unless motor
                 messages = motor.set_groups(value)
-                @mutex.synchronize do
-                  messages.each { |m| @queues[0].push(MessageAndRetries.new(m, 5, 0)) }
-                  @cond.signal
-                end
+                enqueue(MessageAndRetries.new(m, 5, 0))
                 nil
             end
 

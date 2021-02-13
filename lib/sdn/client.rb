@@ -52,24 +52,30 @@ module SDN
       loop do
         message, bytes_read = Message.parse(@buffer.bytes)
         # discard how much we read
-        @buffer = @buffer[bytes_read..-1]
+        @buffer = @buffer[bytes_read..-1] if bytes_read
         unless message
           break unless messages.empty?
 
           begin
-            @buffer.concat(@io.read_nonblock(64 * 1024))
+            block = @io.read_nonblock(64 * 1024)
+            SDN.logger.debug "read #{block.unpack("H*").first.gsub(/\h{2}/, "\\0 ")}"
+            @buffer.concat(block)
             next
           rescue IO::WaitReadable, EOFError
             wait = @buffer.empty? ? timeout : WAIT_TIME
             if @io.wait_readable(wait).nil?
               # timed out; just discard everything
+              SDN.logger.debug "discarding #{@buffer.unpack("H*").first.gsub(/\h{2}/, "\\0 ")} due to timeout"
               @buffer = ""
             end
           end
           next
         end
-        yield message if block_given?
-        messages << message
+        if block_given?
+          yield message
+        else
+          messages << message
+        end
       end
 
       messages
