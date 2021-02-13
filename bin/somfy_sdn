@@ -18,12 +18,14 @@ class SomfySDNCLI < Thor
   desc "mqtt PORT MQTT_URI", "Run an MQTT bridge to control the SDN network at PORT"
   option :"device-id", default: "somfy", desc: "The Homie Device ID"
   option :"base-topic", default: "homie", desc: "The base Homie topic"
+  option :"auto-discover", type: :boolean, default: true, desc: "Do a discovery at startup"
   def mqtt(port, mqtt_uri)
     require 'sdn/cli/mqtt'
 
     SDN::CLI::MQTT.new(port, mqtt_uri,
       device_id: options["device-id"],
-      base_topic: options["base-topic"])
+      base_topic: options["base-topic"],
+      auto_discover: options["auto-discover"])
   end
 
   desc "provision PORT [ADDRESS]", "Provision a motor (label and set limits) at PORT"

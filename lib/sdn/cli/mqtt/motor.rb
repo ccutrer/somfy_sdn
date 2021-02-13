@@ -68,9 +68,11 @@ module SDN
     
         def add_group(index, address)
           group = bridge.add_group(Message.print_address(address)) if address
-          @groups[index] = address
+          old_group = @groups[index - 1]
+          @groups[index - 1] = address
           group&.publish(:motors, group.motors_string)
           publish(:groups, groups_string)
+          bridge.touch_group(old_group) if old_group
         end
     
         def set_groups(groups)
@@ -81,8 +83,8 @@ module SDN
           sdn_addr = Message.parse_address(addr)
           groups.each_with_index do |g, i|
             if @groups[i] != g
-              messages << Message::SetGroupAddr.new(sdn_addr, i, g).tap { |m| m.ack_requested = true }
-              messages << Message::GetGroupAddr.new(sdn_addr, i)
+              messages << Message::SetGroupAddr.new(sdn_addr, i + 1, g).tap { |m| m.ack_requested = true }
+              messages << Message::GetGroupAddr.new(sdn_addr, i + 1)
             end
           end
           messages

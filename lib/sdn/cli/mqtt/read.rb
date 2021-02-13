@@ -8,7 +8,7 @@ module SDN
               @sdn.receive do |message|
                 src = Message.print_address(message.src)
                 # ignore the UAI Plus and ourselves
-                if src != '7F.7F.7F' && !Message::is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
+                if src != '7F.7F.7F' && !Message.is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
                   motor = publish_motor(src.gsub('.', ''), message.node_type)
                   puts "found new motor #{src}"
                 end
@@ -45,15 +45,29 @@ module SDN
                   motor.publish(:position_pulses, message.position_pulses)
                   motor.publish(:ip, message.ip) if message.respond_to?(:ip)
                   motor.group_objects.each do |group|
-                    positions = group.motor_objects.map(&:"position-percent")
-                    position = nil
+                    positions_percent = group.motor_objects.map(&:position_percent)
+                    positions_pulses = group.motor_objects.map(&:position_pulses)
+                    ips = group.motor_objects.map(&:ip)
+
+                    position_percent = nil
                     # calculate an average, but only if we know a position for
                     # every shade
-                    if !positions.include?(:nil) && !positions.include?(nil)
-                      position = positions.inject(&:+) / positions.length
+                    if !positions_percent.include?(:nil) && !positions_percent.include?(nil)
+                      position_percent = positions_percent.inject(&:+) / positions_percent.length
                     end
 
-                    group.publish(:position_percent, position)
+                    position_pulses = nil
+                    if !positions_pulses.include?(:nil) && !positions_pulses.include?(nil)
+                      position_pulses = positions_pulses.inject(&:+) / positions_pulses.length
+                    end
+
+                    ip = nil
+                    ip = ips.first if ips.uniq.length == 1
+                    ip = nil if ip == :nil
+
+                    group.publish(:position_percent, position_percent)
+                    group.publish(:position_pulses, position_pulses)
+                    group.publish(:ip, ip)
                   end
                 when Message::PostMotorStatus
                   if message.state == :running || motor.state == :running ||
@@ -74,6 +88,10 @@ module SDN
                     states = group.motor_objects.map(&:state).uniq
                     state = states.length == 1 ? states.first : 'mixed'
                     group.publish(:state, state)
+
+                    directions = group.motor_objects.map(&:last_direction).uniq
+                    direction = directions.length == 1 ? directions.first : 'mixed'
+                    group.publish(:last_direction, direction)
                   end
                 when Message::PostMotorLimits
                   motor.publish(:up_limit, message.up_limit)
@@ -99,7 +117,17 @@ module SDN
                 end
 
                 @mutex.synchronize do
-                  correct_response = @response_pending && message.src == @prior_message&.message&.dest && @prior_message&.message&.class&.expected_response?(message)
+                  prior_message_to_group = Message.is_group_address?(@prior_message&.message&.src)
+
+                  correct_response = @response_pending && @prior_message&.message&.class&.expected_response?(message)
+                  correct_response = false if !prior_message_to_group && message.src != @prior_message&.message&.dest
+                  correct_response = false if prior_message_to_group && message.dest != @prior_message&.message&.src
+
+                  if prior_message_to_group && correct_response
+                    @pending_group_motors.delete(Message.print_address(message.src).gsub('.', ''))
+                    correct_response = false unless @pending_group_motors.empty?
+                  end
+
                   signal = correct_response || !follow_ups.empty?
                   @response_pending = @broadcast_pending if correct_response
                   follow_ups.each do |follow_up|

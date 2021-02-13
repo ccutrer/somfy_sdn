@@ -22,7 +22,7 @@ module SDN
 
       attr_reader :motors, :groups
 
-      def initialize(port, mqtt_uri, device_id: "somfy", base_topic: "homie")
+      def initialize(port, mqtt_uri, device_id: "somfy", base_topic: "homie", auto_discover: true)
         @base_topic = "#{base_topic}/#{device_id}"
         @mqtt = ::MQTT::Client.new(mqtt_uri)
         @mqtt.set_will("#{@base_topic}/$state", "lost", true)
@@ -38,7 +38,7 @@ module SDN
         @broadcast_pending = false
 
         # queue an initial discovery
-        @queues[2].push(MessageAndRetries.new(Message::GetNodeAddr.new, 1, 2))
+        @queues[2].push(MessageAndRetries.new(Message::GetNodeAddr.new, 1, 2)) if auto_discover
 
         publish_basic_attributes
 
@@ -247,7 +247,7 @@ module SDN
           publish("#{addr}/slow-speed/$settable", "true")
         end
 
-        publish("#{addr}/groups/$name", "Group Memberships")
+        publish("#{addr}/groups/$name", "Group Memberships (comma separated, address must start 0101xx)")
         publish("#{addr}/groups/$datatype", "string")
         publish("#{addr}/groups/$settable", "true")
 
@@ -292,6 +292,11 @@ module SDN
         motor
       end
 
+      def touch_group(group_addr)
+        group = @groups[Message.print_address(group_addr).gsub('.', '')]
+        group&.publish(:motors, group.motors_string)
+      end
+
       def add_group(addr)
         addr = addr.gsub('.', '')
         group = @groups[addr]
@@ -299,7 +304,7 @@ module SDN
 
         publish("#{addr}/$name", addr)
         publish("#{addr}/$type", "Shade Group")
-        publish("#{addr}/$properties", "discover,control,jog-ms,jog-pulses,position-pulses,position-percent,ip,reset,state,motors")
+        publish("#{addr}/$properties", "discover,control,jog-ms,jog-pulses,position-pulses,position-percent,ip,reset,state,last-direction,motors")
 
         publish("#{addr}/discover/$name", "Trigger Motor Discovery")
         publish("#{addr}/discover/$datatype", "enum")
@@ -344,11 +349,15 @@ module SDN
         publish("#{addr}/ip/$format", "1:16")
         publish("#{addr}/ip/$settable", "true")
 
-        publish("#{addr}/state/$name", "State of the motors; only set if all motors are in the same state")
+        publish("#{addr}/state/$name", "State of the motors")
         publish("#{addr}/state/$datatype", "enum")
-        publish("#{addr}/state/$format", Message::PostMotorStatus::STATE.keys.join(','))
+        publish("#{addr}/state/$format", Message::PostMotorStatus::STATE.keys.join(',')  + ",mixed")
 
-        publish("#{addr}/motors/$name", "Motors that are members of this group")
+        publish("#{addr}/last-direction/$name", "Direction of last motion")
+        publish("#{addr}/last-direction/$datatype", "enum")
+        publish("#{addr}/last-direction/$format", Message::PostMotorStatus::DIRECTION.keys.join(',')  + ",mixed")
+
+        publish("#{addr}/motors/$name", "Comma separated motor addresses that are members of this group")
         publish("#{addr}/motors/$datatype", "string")
 
         group = @groups[addr] = Group.new(self, addr)

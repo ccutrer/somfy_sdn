@@ -14,9 +14,20 @@ module SDN
                     puts "timed out waiting on response"
                     @response_pending = nil
                     @broadcast_pending = nil
-                    if @prior_message&.remaining_retries != 0
+                    if @prior_message && @prior_message&.remaining_retries != 0
                       puts "retrying #{@prior_message.remaining_retries} more times ..."
-                      @queues[@prior_message.priority].push(@prior_message)
+                      if Message.is_group_address?(@prior_message.message.src) && !@pending_group_motors.empty?
+                        puts "re-targetting group message to individual motors"
+                        @pending_group_motors.each do |addr|
+                          new_message = @prior_message.message.dup
+                          new_message.src = [0, 0, 1]
+                          new_message.dest = Message.parse_address(addr)
+                          @queues[@prior_message.priority].push(MessageAndRetries.new(new_message, @prior_message.remaining_retries, @prior_message.priority))
+                        end
+                        @pending_group_motors = []
+                      else
+                        @queues[@prior_message.priority].push(@prior_message)
+                      end
                       @prior_message = nil
                     end
                   else
@@ -32,7 +43,14 @@ module SDN
               if message_and_retries
                 if message_and_retries.message.ack_requested || message_and_retries.message.class.name =~ /^SDN::Message::Get/
                   @response_pending = Time.now.to_f + WAIT_TIME
-                  if message_and_retries.message.dest == BROADCAST_ADDRESS || Message::is_group_address?(message_and_retries.message.src) && message_and_retries.message.is_a?(Message::GetNodeAddr)
+                  @pending_group_motors = if Message.is_group_address?(message_and_retries.message.src)
+                    group_addr = Message.print_address(message_and_retries.message.src).gsub('.', '')
+                    @groups[group_addr]&.motor_objects&.map(&:addr) || []
+                  else
+                    []
+                  end
+                    
+                  if message_and_retries.message.dest == BROADCAST_ADDRESS || Message.is_group_address?(message_and_retries.message.src) && message_and_retries.message.is_a?(Message::GetNodeAddr)
                     @broadcast_pending = Time.now.to_f + BROADCAST_WAIT
                   end
                 end
@@ -55,7 +73,7 @@ module SDN
             @sdn.send(message)
           end
         rescue => e
-          puts "failure writing: #{e}"
+          puts "failure writing: #{e}: #{e.backtrace}"
           exit 1
         end
       end

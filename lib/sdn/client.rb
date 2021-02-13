@@ -39,7 +39,7 @@ module SDN
       loop do
         messages = transact(message)
         next if messages.empty?
-        next unless message.expected_response?(messages.first)
+        next unless message.class.expected_response?(messages.first)
         return messages.first
       end
     end

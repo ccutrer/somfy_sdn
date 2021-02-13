@@ -21,7 +21,7 @@ module SDN
 
         puts "Preparing to provision motor #{Message.print_address(addr)}"
 
-        message = sdn.ensure(Message::GetNodeLabel.new(addr), Message::PostNodeLabel)
+        message = sdn.ensure(Message::GetNodeLabel.new(addr))
 
         node_type = message.node_type
         @ns = ns = node_type == :st50ilt2 ? Message::ILT2 : Message
@@ -195,15 +195,15 @@ r    reverse motor
       end
 
       def refresh
-        pos = sdn.ensure(ns::GetMotorPosition.new(addr), ns::PostMotorPosition)
+        pos = sdn.ensure(ns::GetMotorPosition.new(addr))
         @pos = pos.position_pulses
         if ilt2?
-          settings = sdn.ensure(Message::ILT2::GetMotorSettings.new(addr), Message::ILT2::PostMotorSettings)
+          settings = sdn.ensure(Message::ILT2::GetMotorSettings.new(addr))
           @limit = settings.limit
         else
-          limits = sdn.ensure(Message::GetMotorLimits.new(addr), Message::PostMotorLimits)
+          limits = sdn.ensure(Message::GetMotorLimits.new(addr))
           @limit = limits.down_limit
-          direction = sdn.ensure(Message::GetMotorDirection.new(addr), Message::PostMotorDirection)
+          direction = sdn.ensure(Message::GetMotorDirection.new(addr))
           @reversed = direction.direction == :reversed
         end
 
