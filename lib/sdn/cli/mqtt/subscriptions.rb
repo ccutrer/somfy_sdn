@@ -26,7 +26,7 @@ module SDN
                 follow_up = nil
                 if value == "discover"
                   # discovery is low priority, and longer timeout
-                  enqueue(2, MessageAndRetries.new(Message::GetNodeAddr.new(addr), 1, 2))
+                  enqueue(MessageAndRetries.new(Message::GetNodeAddr.new(addr), 1, 2), 2)
                 end
                 nil
               when 'label'
@@ -127,7 +127,10 @@ module SDN
                 return if is_group
                 return unless motor
                 messages = motor.set_groups(value)
-                enqueue(MessageAndRetries.new(m, 5, 0))
+                @mutex.synchronize do
+                  messages.each { |m| @queues[0].push(MessageAndRetries.new(m, 5, 0)) }
+                  @cond.signal
+                end
                 nil
             end
 
