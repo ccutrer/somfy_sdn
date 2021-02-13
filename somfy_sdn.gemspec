@@ -10,7 +10,7 @@ Gem::Specification.new do |s|
   s.summary = "Library for communication with Somfy SDN RS-485 motorized shades"
   s.license = "MIT"
 
-  s.executables = ['sdn_mqtt_bridge']
+  s.executables = ['somfy_sdn']
   s.files = Dir["{bin,lib}/**/*"]
 
   s.add_dependency 'ccutrer-serialport', "~> 1.0"
