@@ -37,8 +37,8 @@ module SDN
         @response_pending = false
         @broadcast_pending = false
 
-        # queue an initial discovery
-        @queues[2].push(MessageAndRetries.new(Message::GetNodeAddr.new, 1, 2)) if auto_discover
+        @auto_discover = auto_discover
+        @motors_found = true
 
         publish_basic_attributes
 

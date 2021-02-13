@@ -12,6 +12,7 @@ module SDN
                 # ignore the UAI Plus and ourselves
                 if src != '7F.7F.7F' && !Message.is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
                   SDN.logger.info "found new motor #{src}"
+                  @motors_found = true
                   motor = publish_motor(src.gsub('.', ''), message.node_type)
                 end
 
@@ -118,7 +119,7 @@ module SDN
                 end
 
                 @mutex.synchronize do
-                  prior_message_to_group = Message.is_group_address?(@prior_message&.message&.src)
+                  prior_message_to_group = Message.is_group_address?(@prior_message&.message&.src) if @prior_message
 
                   correct_response = @response_pending && @prior_message&.message&.class&.expected_response?(message)
                   correct_response = false if !prior_message_to_group && message.src != @prior_message&.message&.dest

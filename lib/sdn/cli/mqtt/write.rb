@@ -3,6 +3,8 @@ module SDN
     class MQTT
       module Write
         def write
+          last_write_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
           loop do
             message_and_retries = nil
             @mutex.synchronize do
@@ -34,9 +36,6 @@ module SDN
                     @cond.wait(@mutex, remaining_wait)
                   end
                 end
-              else
-                # minimum time between messages
-                sleep 0.1
               end
 
               @queues.find { |q| message_and_retries = q.shift }
@@ -63,14 +62,26 @@ module SDN
               elsif message_and_retries
                 @prior_message = nil  
               else
-                @cond.wait(@mutex)
+                if @auto_discover && @motors_found
+                  # nothing pending to write, and motors found on the last iteration;
+                  # look for more motors
+                  message_and_retries = MessageAndRetries.new(Message::GetNodeAddr.new, 1, 2)
+                  @motors_found = false
+                else
+                  @cond.wait(@mutex)
+                end
               end
             end
             next unless message_and_retries
 
             message = message_and_retries.message
             SDN.logger.info "writing #{message.inspect}"
+            # minimum time between messages
+            now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            sleep_time = 0.1 - (now - last_write_at)
+            sleep(sleep_time) if sleep_time > 0
             @sdn.send(message)
+            last_write_at = now
           end
         rescue => e
           SDN.logger.fatal "failure writing: #{e}: #{e.backtrace}"
