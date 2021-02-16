@@ -40,6 +40,7 @@ module SDN
         @auto_discover = auto_discover
         @motors_found = true
 
+        clear_tree(@base_topic)
         publish_basic_attributes
 
         @sdn = Client.new(port)
@@ -64,6 +65,15 @@ module SDN
             queue.push(message)
             @cond.signal
           end
+        end
+      end
+
+      def clear_tree(topic)
+        @mqtt.subscribe("#{topic}/#")
+        @mqtt.unsubscribe("#{topic}/#", wait_for_ack: true)
+        while !@mqtt.queue_empty?
+          topic, value = @mqtt.get
+          @mqtt.publish(topic, nil, retain: true)
         end
       end
 
