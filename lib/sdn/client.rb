@@ -9,10 +9,12 @@ module SDN
         TCPSocket.new(uri.host, uri.port)
       elsif uri.scheme == "telnet" || uri.scheme == "rfc2217"
         require 'net/telnet/rfc2217'
-        Net::Telnet::RFC2217.new('Host' => uri.host,
-         'Port' => uri.port || 23,
-         'baud' => 4800,
-         'parity' => Net::Telnet::RFC2217::ODD)
+        Net::Telnet::RFC2217.new(host: uri.host,
+         port: uri.port || 23,
+         baud: 4800,
+         data_bits: 8,
+         parity: :odd,
+         stop_bits: 1)
       elsif port == "/dev/ptmx"
         require 'pty'
         io, slave = PTY.open
