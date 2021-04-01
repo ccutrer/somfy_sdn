@@ -79,7 +79,7 @@ module SDN
 
       def publish_basic_attributes
         @mqtt.batch_publish do
-          publish("$homie", "v4.0.0")
+          publish("$homie", "4.0.0")
           publish("$name", "Somfy SDN Network")
           publish("$state", "init")
           publish("$nodes", "FFFFFF")
