@@ -25,7 +25,7 @@ module SDN
       def initialize(port, mqtt_uri, device_id: "somfy", base_topic: "homie", auto_discover: true)
         @base_topic = "#{base_topic}/#{device_id}"
         @mqtt = ::MQTT::Client.new(mqtt_uri)
-        @mqtt.set_will("#{@base_topic}/$state", "lost", true)
+        @mqtt.set_will("#{@base_topic}/$state", "lost", retain: true)
         @mqtt.connect
 
         @motors = {}
@@ -47,7 +47,7 @@ module SDN
 
         read_thread = Thread.new { read }
         write_thread = Thread.new { write }
-        @mqtt.get { |topic, value| handle_message(topic, value) }
+        @mqtt.get { |packet| handle_message(packet.topic, packet.payload) }
       end
 
       def publish(topic, value)
@@ -72,8 +72,8 @@ module SDN
         @mqtt.subscribe("#{topic}/#")
         @mqtt.unsubscribe("#{topic}/#", wait_for_ack: true)
         while !@mqtt.queue_empty?
-          topic, value = @mqtt.get
-          @mqtt.publish(topic, nil, retain: true)
+          packet = @mqtt.get
+          @mqtt.publish(packet.topic, nil, retain: true)
         end
       end
 
