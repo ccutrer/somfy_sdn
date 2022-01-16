@@ -94,28 +94,38 @@ module SDN
           publish("FFFFFF/discover/$settable", "true")
           publish("FFFFFF/discover/$retained", "false")
 
-          subscribe("+/discover/set")
-          subscribe("+/label/set")
-          subscribe("+/control/set")
-          subscribe("+/jog-ms/set")
-          subscribe("+/jog-pulses/set")
-          subscribe("+/position-pulses/set")
-          subscribe("+/position-percent/set")
-          subscribe("+/ip/set")
-          subscribe("+/reset/set")
-          subscribe("+/direction/set")
-          subscribe("+/up-speed/set")
-          subscribe("+/down-speed/set")
-          subscribe("+/slow-speed/set")
-          subscribe("+/up-limit/set")
-          subscribe("+/down-limit/set")
-          subscribe("+/groups/set")
-          (1..16).each do |ip|
-            subscribe("+/ip#{ip}-pulses/set")
-            subscribe("+/ip#{ip}-percent/set")
-          end
+          subscribe_all
 
           publish("$state", "ready")
+        end
+
+        @mqtt.on_reconnect do
+          subscribe_all
+          publish("$state", :init)
+          publish("$state", :ready)
+        end
+      end
+
+      def subscribe_all
+        subscribe("+/discover/set")
+        subscribe("+/label/set")
+        subscribe("+/control/set")
+        subscribe("+/jog-ms/set")
+        subscribe("+/jog-pulses/set")
+        subscribe("+/position-pulses/set")
+        subscribe("+/position-percent/set")
+        subscribe("+/ip/set")
+        subscribe("+/reset/set")
+        subscribe("+/direction/set")
+        subscribe("+/up-speed/set")
+        subscribe("+/down-speed/set")
+        subscribe("+/slow-speed/set")
+        subscribe("+/up-limit/set")
+        subscribe("+/down-limit/set")
+        subscribe("+/groups/set")
+        (1..16).each do |ip|
+          subscribe("+/ip#{ip}-pulses/set")
+          subscribe("+/ip#{ip}-percent/set")
         end
       end
 
