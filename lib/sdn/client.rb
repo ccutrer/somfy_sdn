@@ -59,7 +59,7 @@ module SDN
           break unless messages.empty?
 
           # one EOF is just serial ports saying they have no data;
-          # two EOFs in a row is the file is dead and gone
+          # several EOFs in a row is the file is dead and gone
           eofs = 0
           begin
             block = @io.read_nonblock(64 * 1024)
@@ -72,7 +72,7 @@ module SDN
             else
               eofs = 0
             end
-            raise if eofs == 2
+            raise if eofs == 5
 
             wait = @buffer.empty? ? timeout : WAIT_TIME
             if @io.wait_readable(wait).nil?
