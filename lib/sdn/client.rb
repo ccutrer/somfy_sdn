@@ -58,18 +58,30 @@ module SDN
         unless message
           break unless messages.empty?
 
+          # one EOF is just serial ports saying they have no data;
+          # two EOFs in a row is the file is dead and gone
+          eofs = 0
           begin
             block = @io.read_nonblock(64 * 1024)
             SDN.logger.debug "read #{block.unpack("H*").first.gsub(/\h{2}/, "\\0 ")}"
             @buffer.concat(block)
             next
-          rescue IO::WaitReadable, EOFError
+          rescue IO::WaitReadable, EOFError => e
+            if e.is_a?(EOFError)
+              eofs += 1
+            else
+              eofs = 0
+            end
+            raise if eofs == 2
+
             wait = @buffer.empty? ? timeout : WAIT_TIME
             if @io.wait_readable(wait).nil?
               # timed out; just discard everything
               SDN.logger.debug "discarding #{@buffer.unpack("H*").first.gsub(/\h{2}/, "\\0 ")} due to timeout"
               @buffer = ""
             end
+
+            retry
           end
           next
         end

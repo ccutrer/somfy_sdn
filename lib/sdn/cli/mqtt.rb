@@ -45,6 +45,7 @@ module SDN
 
         @sdn = Client.new(port)
 
+        Thread.abort_on_exception = true
         read_thread = Thread.new { read }
         write_thread = Thread.new { write }
         @mqtt.get { |packet| handle_message(packet.topic, packet.payload) }
