@@ -111,6 +111,7 @@ module SDN
     def inspect
       "#<%s @node_type=%s, @ack_requested=%s, @src=%s, @dest=%s%s>" % [self.class.name, node_type_to_string(node_type), ack_requested, print_address(src), print_address(dest), class_inspect]
     end
+    alias_method :to_s, :inspect
 
     def class_inspect
       ivars = instance_variables - [:@node_type, :@ack_requested, :@src, :@dest, :@params]

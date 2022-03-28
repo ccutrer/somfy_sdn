@@ -79,6 +79,7 @@ module SDN
               # timed out; just discard everything
               SDN.logger.debug "discarding #{@buffer.unpack("H*").first.gsub(/\h{2}/, "\\0 ")} due to timeout"
               @buffer = ""
+              return messages if timeout
             end
 
             retry

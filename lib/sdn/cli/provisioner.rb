@@ -70,6 +70,7 @@ module SDN
         win.keypad = true
         print_help
         refresh
+        wait_for_stop
 
         loop do
           char = win.getch
@@ -170,18 +171,29 @@ r    reverse motor
       def wait_for_stop
         win.setpos(13, 0)
         win.addstr("Moving...\n")
+
         loop do
           win.nodelay = true
           stop if win.getch == 27 # Esc
-          sdn.send(ns::GetMotorPosition.new(addr))
-          sdn.receive do |message|
-            next unless message.is_a?(ns::PostMotorPosition)
-            last_pos = @pos
-            @pos = message.position_pulses
-            win.setpos(14, 0)
-            win.addstr("Position: #{@pos}\n")
 
-            if last_pos == @pos
+          sdn.send(ns::GetMotorPosition.new(addr))
+          unless ilt2?
+            sleep 0.1
+            sdn.send(ns::GetMotorStatus.new(addr))
+          end
+
+          sdn.receive(0.1) do |message|
+
+            if message.is_a?(ns::PostMotorPosition)
+              last_pos = @pos
+              @pos = message.position_pulses
+              win.setpos(14, 0)
+              win.addstr("Position: #{@pos}\n")
+            end
+
+            if (ilt2? && last_pos == @pos) ||
+               (message.is_a?(Message::PostMotorStatus) &&
+                message.state != :running)
               win.setpos(13, 0)
               win.addstr("\n")
               win.nodelay = false
@@ -190,7 +202,6 @@ r    reverse motor
             end
           end
           sleep 0.1
-          
         end
       end
 
