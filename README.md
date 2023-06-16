@@ -132,6 +132,7 @@ Text label="Master Bedroom" icon=bedroom {
 This gem supports using an RS-485 direct connection. It is possible to directly
 connect to the GPIO on a Raspberry Pi, or to use a USB RS-485 dongle such as
 [this one from Amazon](https://www.amazon.com/gp/product/B07B416CPK).
+Any adapter based on the MAX485 chip is _not_ supported.
 The key is identifying the correct wires as RS-485+ and RS-485-.
 It's easiest to connect to the Data Pass-through port of the Bus Power Supply
 using an ethernet patch cable. You'll cut off the other end, and connect pins
