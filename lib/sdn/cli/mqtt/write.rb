@@ -26,13 +26,13 @@ module SDN
                           new_message = @prior_message.message.dup
                           new_message.src = [0, 0, 1]
                           new_message.dest = Message.parse_address(addr)
-                          @queues[@prior_message.priority].push(MessageAndRetries.new(new_message,
-                                                                                      @prior_message.remaining_retries,
-                                                                                      @prior_message.priority))
+                          @queue.push(MessageAndRetries.new(new_message,
+                                                            @prior_message.remaining_retries,
+                                                            @prior_message.priority))
                         end
                         @pending_group_motors = []
                       else
-                        @queues[@prior_message.priority].push(@prior_message)
+                        @queue.push(@prior_message)
                       end
                       @prior_message = nil
                     end
@@ -42,7 +42,7 @@ module SDN
                 end
               end
 
-              @queues.find { |q| message_and_retries = q.shift }
+              message_and_retries = @queue.shift
               if message_and_retries && (
                 message_and_retries.message.ack_requested ||
                 message_and_retries.message.class.name =~ /^SDN::Message::Get/)

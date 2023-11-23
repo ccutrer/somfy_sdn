@@ -6,6 +6,7 @@ require "set"
 
 require "sdn/cli/mqtt/group"
 require "sdn/cli/mqtt/motor"
+require "sdn/cli/mqtt/p_queue"
 require "sdn/cli/mqtt/read"
 require "sdn/cli/mqtt/write"
 require "sdn/cli/mqtt/subscriptions"
@@ -35,7 +36,7 @@ module SDN
 
         @mutex = Mutex.new
         @cond = ConditionVariable.new
-        @queues = [[], [], []]
+        @queue = PQueue.new
         @response_pending = false
         @broadcast_pending = false
 
@@ -61,13 +62,12 @@ module SDN
         @mqtt.subscribe("#{@base_topic}/#{topic}")
       end
 
-      def enqueue(message, queue = 0)
+      def enqueue(message)
         @mutex.synchronize do
-          queue = @queues[queue]
-          unless queue.include?(message)
-            queue.push(message)
-            @cond.signal
-          end
+          break if @queue.include?(message)
+
+          @queue.push(message)
+          @cond.signal
         end
       end
 
@@ -298,22 +298,22 @@ module SDN
 
         sdn_addr = Message.parse_address(addr)
         @mutex.synchronize do
-          @queues[2].push(MessageAndRetries.new(Message::GetNodeLabel.new(sdn_addr), 5, 2))
+          @queue.push(MessageAndRetries.new(Message::GetNodeLabel.new(sdn_addr), 5, 2))
           case node_type
           when :st30
-            @queues[2].push(MessageAndRetries.new(Message::GetMotorStatus.new(sdn_addr), 5, 2))
-            @queues[2].push(MessageAndRetries.new(Message::GetMotorLimits.new(sdn_addr), 5, 2))
-            @queues[2].push(MessageAndRetries.new(Message::GetMotorDirection.new(sdn_addr), 5, 2))
-            @queues[2].push(MessageAndRetries.new(Message::GetMotorRollingSpeed.new(sdn_addr), 5, 2))
-            (1..16).each { |ip| @queues[2].push(MessageAndRetries.new(Message::GetMotorIP.new(sdn_addr, ip), 5, 2)) }
+            @queue.push(MessageAndRetries.new(Message::GetMotorStatus.new(sdn_addr), 5, 2))
+            @queue.push(MessageAndRetries.new(Message::GetMotorLimits.new(sdn_addr), 5, 2))
+            @queue.push(MessageAndRetries.new(Message::GetMotorDirection.new(sdn_addr), 5, 3))
+            @queue.push(MessageAndRetries.new(Message::GetMotorRollingSpeed.new(sdn_addr), 5, 3))
+            (1..16).each { |ip| @queue.push(MessageAndRetries.new(Message::GetMotorIP.new(sdn_addr, ip), 5, 3)) }
           when :st50ilt2
-            @queues[2].push(MessageAndRetries.new(Message::ILT2::GetMotorSettings.new(sdn_addr), 5, 2))
-            @queues[2].push(MessageAndRetries.new(Message::ILT2::GetMotorPosition.new(sdn_addr), 5, 2))
+            @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorSettings.new(sdn_addr), 5, 2))
+            @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorPosition.new(sdn_addr), 5, 2))
             (1..16).each do |ip|
-              @queues[2].push(MessageAndRetries.new(Message::ILT2::GetMotorIP.new(sdn_addr, ip), 5, 2))
+              @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorIP.new(sdn_addr, ip), 5, 3))
             end
           end
-          (1..16).each { |g| @queues[2].push(MessageAndRetries.new(Message::GetGroupAddr.new(sdn_addr, g), 5, 2)) }
+          (1..16).each { |g| @queue.push(MessageAndRetries.new(Message::GetGroupAddr.new(sdn_addr, g), 5, 3)) }
 
           @cond.signal
         end

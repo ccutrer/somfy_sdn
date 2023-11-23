@@ -132,9 +132,9 @@ module SDN
                   signal = correct_response || !follow_ups.empty?
                   @response_pending = @broadcast_pending if correct_response
                   follow_ups.each do |follow_up|
-                    @queues[1].push(MessageAndRetries.new(follow_up, 5, 1)) unless @queues[1].any? do |mr|
-                                                                                     mr.message == follow_up
-                                                                                   end
+                    unless @queue.any? { |mr| mr.message == follow_up }
+                      @queue.push(MessageAndRetries.new(follow_up, 5, 1))
+                    end
                   end
                   @cond.signal if signal
                 end
