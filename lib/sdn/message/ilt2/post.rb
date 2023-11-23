@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SDN
   class Message
     module ILT2
@@ -13,7 +15,7 @@ module SDN
         end
 
         def channels=(value)
-          @channels = value &. & 0xff
+          @channels = value&.& 0xff
         end
 
         def parse(params)
@@ -26,7 +28,7 @@ module SDN
         end
 
         def class_inspect
-          ", @channels=#{channels.chr.unpack('b8').first}"
+          ", @channels=#{channels.chr.unpack1("b8")}"
         end
       end
 
@@ -77,9 +79,9 @@ module SDN
       class PostMotorPosition < Message
         MSG = 0x64
         PARAMS_LENGTH = 3
-  
+
         attr_accessor :position_pulses, :position_percent
-  
+
         def initialize(position_pulses = nil, position_percent = nil, **kwargs)
           super(**kwargs)
           self.position_pulses = position_pulses
@@ -94,7 +96,7 @@ module SDN
 
         def params
           from_number(position_pulses, 2) +
-            from_number(position_percent && position_percent * 255 / 100)
+            from_number(position_percent && (position_percent * 255 / 100))
         end
       end
 

@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 module SDN
   class Message
     class Lock < Message
       MSG = 0x06
       PARAMS_LENGTH = 5
-      TARGET_TYPE = { current: 0, up_limit: 1, down_limit: 2, ip: 4, unlock: 5, position_percent: 7 }
+      TARGET_TYPE = { current: 0, up_limit: 1, down_limit: 2, ip: 4, unlock: 5, position_percent: 7 }.freeze
 
       attr_reader :target_type, :target, :priority
 
@@ -16,12 +18,16 @@ module SDN
       end
 
       def target_type=(value)
-        raise ArgumentError, "target_type must be one of :current, :up_limit, :down_limit, :ip, :unlock, or :position_percent" unless TARGET_TYPE.keys.include?(value)
+        unless TARGET_TYPE.key?(value)
+          raise ArgumentError,
+                "target_type must be one of :current, :up_limit, :down_limit, :ip, :unlock, or :position_percent"
+        end
+
         @target_type = value
       end
 
       def target=(value)
-        @target = value&. & 0xffff
+        @target = value&.& 0xffff
       end
 
       def priority=(value)
@@ -37,7 +43,8 @@ module SDN
       end
 
       def params
-        transform_param(TARGET_TYPE[target_type]) + from_number(target, 2) + transform_param(priority) + transform_param(0)
+        transform_param(TARGET_TYPE[target_type]) + from_number(target,
+                                                                2) + transform_param(priority) + transform_param(0)
       end
     end
 
@@ -56,29 +63,38 @@ module SDN
         self.direction = direction
         self.duration = duration
         self.speed = speed
-     end
+      end
 
-     def parse(params)
-       super
-       self.direction = DIRECTION.invert[to_number(params[0])]
-       duration = to_number(params[1])
-       duration = nil if duration == 0
-       self.duration = duration
-       self.speed = SPEED.invert[to_number(params[3])]
-     end
+      def parse(params)
+        super
+        self.direction = DIRECTION.invert[to_number(params[0])]
+        duration = to_number(params[1])
+        duration = nil if duration.zero?
+        self.duration = duration
+        self.speed = SPEED.invert[to_number(params[3])]
+      end
 
-     def direction=(value)
-        raise ArgumentError, "direction must be one of :down, :up, or :cancel (#{value})" unless DIRECTION.keys.include?(value)
+      def direction=(value)
+        unless DIRECTION.key?(value)
+          raise ArgumentError,
+                "direction must be one of :down, :up, or :cancel (#{value})"
+        end
+
         @direction = value
-     end
+      end
 
-     def duration=(value)
-        raise ArgumentError, "duration must be in range 0x0a to 0xff (#{value})" if value && (value < 0x0a || value > 0xff)
+      def duration=(value)
+        if value && (value < 0x0a || value > 0xff)
+          raise ArgumentError,
+                "duration must be in range 0x0a to 0xff (#{value})"
+        end
+
         @duration = value
-     end
+      end
 
-     def speed=(value)
-        raise ArgumentError, "speed must be one of :up, :down, or :slow (#{value})" unless SPEED.keys.include?(value)
+      def speed=(value)
+        raise ArgumentError, "speed must be one of :up, :down, or :slow (#{value})" unless SPEED.key?(value)
+
         @speed = speed
       end
 
@@ -93,7 +109,12 @@ module SDN
     class MoveOf < Message
       MSG = 0x04
       PARAMS_LENGTH = 4
-      TARGET_TYPE = { next_ip: 0x00, previous_ip: 0x01, jog_down_pulses: 0x02, jog_up_pulses: 0x03, jog_down_ms: 0x04, jog_up_ms: 0x05 }
+      TARGET_TYPE = { next_ip: 0x00,
+                      previous_ip: 0x01,
+                      jog_down_pulses: 0x02,
+                      jog_up_pulses: 0x03,
+                      jog_down_ms: 0x04,
+                      jog_up_ms: 0x05 }.freeze
 
       attr_reader :target_type, :target
 
@@ -108,12 +129,16 @@ module SDN
         super
         self.target_type = TARGET_TYPE.invert[to_number(params[0])]
         target = to_number(params[1..2], nillable: true)
-        target *= 10 if %I{jog_down_ms jog_up_ms}.include?(target_type)
+        target *= 10 if %I[jog_down_ms jog_up_ms].include?(target_type)
         self.target = target
       end
 
       def target_type=(value)
-        raise ArgumentError, "target_type must be one of :next_ip, :previous_ip, :jog_down_pulses, :jog_up_pulses, :jog_down_ms, :jog_up_ms" unless value.nil? || TARGET_TYPE.keys.include?(value)
+        unless value.nil? || TARGET_TYPE.key?(value)
+          raise ArgumentError, "target_type must be one of :next_ip, :previous_ip, " \
+                               ":jog_down_pulses, :jog_up_pulses, :jog_down_ms, :jog_up_ms"
+        end
+
         @target_type = value
       end
 
@@ -124,7 +149,7 @@ module SDN
 
       def params
         param = target || 0xffff
-        param /= 10 if %I{jog_down_ms jog_up_ms}.include?(target_type)
+        param /= 10 if %I[jog_down_ms jog_up_ms].include?(target_type)
         transform_param(TARGET_TYPE[target_type]) + from_number(param, 2) + transform_param(0)
       end
     end
@@ -138,7 +163,7 @@ module SDN
 
       attr_reader :target_type, :target, :speed
 
-      def initialize(dest= nil, target_type = :down_limit, target = nil, speed = :up, **kwargs)
+      def initialize(dest = nil, target_type = :down_limit, target = nil, speed = :up, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
         self.target_type = target_type
@@ -154,7 +179,11 @@ module SDN
       end
 
       def target_type=(value)
-        raise ArgumentError, "target_type must be one of :down_limit, :up_limit, :ip, :position_pulses, or :position_percent" unless TARGET_TYPE.keys.include?(value)
+        unless TARGET_TYPE.key?(value)
+          raise ArgumentError,
+                "target_type must be one of :down_limit, :up_limit, :ip, :position_pulses, or :position_percent"
+        end
+
         @target_type = value
       end
 
@@ -164,7 +193,8 @@ module SDN
       end
 
       def speed=(value)
-        raise ArgumentError, "speed must be one of :up, :down, or :slow" unless SPEED.keys.include?(value)
+        raise ArgumentError, "speed must be one of :up, :down, or :slow" unless SPEED.key?(value)
+
         @speed = value
       end
 

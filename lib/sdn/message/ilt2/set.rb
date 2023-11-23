@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SDN
   class Message
     module ILT2
@@ -19,7 +21,7 @@ module SDN
           down_limit: 2,
           ip: 4,
           unlock: 5
-        }
+        }.freeze
 
         # when target_type is down_limit, target is number of 10ms intervals it's still allowed to roll up
         attr_reader :target_type, :target, :priority
@@ -40,16 +42,21 @@ module SDN
         end
 
         def target_type=(value)
-          raise ArgumentError, "target_type must be one of :current, :up_limit, :down_limit, :ip, or :unlock" unless TARGET_TYPE.keys.include?(value)
+          unless TARGET_TYPE.key?(value)
+            raise ArgumentError,
+                  "target_type must be one of :current, :up_limit, :down_limit, :ip, or :unlock"
+          end
+
           @target_type = value
         end
 
         def target=(value)
-          @target = value&. & 0xff
+          @target = value&.& 0xff
         end
 
         def priority=(value)
-          raise ArgumentError, "priority must be between 1 and 100" unless (1..100).include?(value)
+          raise ArgumentError, "priority must be between 1 and 100" unless (1..100).cover?(value)
+
           @priority = value
         end
 
@@ -78,12 +85,13 @@ module SDN
         end
 
         def ip=(value)
-          raise ArgumentError, "ip must be in range 1..16 or nil" unless ip.nil? || (1..16).include?(ip)
+          raise ArgumentError, "ip must be in range 1..16 or nil" unless ip.nil? || (1..16).cover?(ip)
+
           @ip = value
         end
 
         def value=(value)
-          @value = value &. & 0xffff
+          @value = value&.& 0xffff
         end
 
         def params
@@ -110,7 +118,7 @@ module SDN
           jog_down_ms: 11,
           jog_up_pulses: 12,
           jog_down_pulses: 13,
-          position_percent: 16,
+          position_percent: 16
         }.freeze
 
         attr_reader :target_type, :target
@@ -126,26 +134,27 @@ module SDN
           super
           self.target_type = TARGET_TYPE.invert[to_number(params[0])]
           target = to_number(params[1..2])
-          if target_type == :position_percent
-            target = target.to_f / 255 * 100
-          end
-          if target_type == :ip
-            target += 1
-          end
+          target = target.to_f / 255 * 100 if target_type == :position_percent
+          target += 1 if target_type == :ip
           self.target = target
         end
 
         def target_type=(value)
-          raise ArgumentError, "target_type must be one of :up_limit, :down_limit, :stop, :ip, :next_ip_up, :next_ip_down, :jog_up, :jog_down, or :position_percent" unless TARGET_TYPE.keys.include?(value)
+          unless TARGET_TYPE.key?(value)
+            raise ArgumentError, "target_type must be one of :up_limit, :down_limit, " \
+                                 ":stop, :ip, :next_ip_up, :next_ip_down, :jog_up, " \
+                                 ":jog_down, or :position_percent"
+          end
+
           @target_type = value
         end
 
         def target=(value)
-          if target_type == :position_percent && value
-            @target = [[0, value].max, 100].min
-          else
-            @target = value&. & 0xffff
-          end
+          @target = if target_type == :position_percent && value
+                      value.clamp(0, 100)
+                    else
+                      value&.& 0xffff
+                    end
         end
 
         def params

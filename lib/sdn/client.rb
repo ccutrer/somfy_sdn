@@ -1,4 +1,6 @@
-require 'io/wait'
+# frozen_string_literal: true
+
+require "io/wait"
 
 module SDN
   class Client
@@ -7,25 +9,25 @@ module SDN
     def initialize(port)
       uri = URI.parse(port)
       @io = if uri.scheme == "tcp"
-        require 'socket'
-        TCPSocket.new(uri.host, uri.port)
-      elsif uri.scheme == "telnet" || uri.scheme == "rfc2217"
-        require 'net/telnet/rfc2217'
-        Net::Telnet::RFC2217.new(host: uri.host,
-         port: uri.port || 23,
-         baud: 4800,
-         data_bits: 8,
-         parity: :odd,
-         stop_bits: 1)
-      elsif port == "/dev/ptmx"
-        require 'pty'
-        io, slave = PTY.open
-        puts "Slave PTY available at #{slave.path}"
-        io
-      else
-        require 'ccutrer-serialport'
-        CCutrer::SerialPort.new(port, baud: 4800, data_bits: 8, parity: :odd, stop_bits: 1)
-      end
+              require "socket"
+              TCPSocket.new(uri.host, uri.port)
+            elsif uri.scheme == "telnet" || uri.scheme == "rfc2217"
+              require "net/telnet/rfc2217"
+              Net::Telnet::RFC2217.new(host: uri.host,
+                                       port: uri.port || 23,
+                                       baud: 4800,
+                                       data_bits: 8,
+                                       parity: :odd,
+                                       stop_bits: 1)
+            elsif port == "/dev/ptmx"
+              require "pty"
+              io, slave = PTY.open
+              puts "Slave PTY available at #{slave.path}"
+              io
+            else
+              require "ccutrer-serialport"
+              CCutrer::SerialPort.new(port, baud: 4800, data_bits: 8, parity: :odd, stop_bits: 1)
+            end
       @buffer = ""
     end
 
@@ -49,6 +51,7 @@ module SDN
         messages = transact(message)
         next if messages.empty?
         next unless message.class.expected_response?(messages.first)
+
         return messages.first
       end
     end
@@ -70,7 +73,7 @@ module SDN
           eofs = 0
           begin
             block = @io.read_nonblock(64 * 1024)
-            SDN.logger.debug("Read #{block.unpack("H*").first.gsub(/\h{2}/, "\\0 ")}") if trace?
+            SDN.logger.debug("Read #{block.unpack1("H*").gsub(/\h{2}/, "\\0 ")}") if trace?
             @buffer.concat(block)
             next
           rescue IO::WaitReadable, EOFError => e
@@ -85,7 +88,7 @@ module SDN
             if @io.wait_readable(wait).nil?
               # timed out; just discard everything
               unless @buffer.empty?
-                SDN.logger.debug "Discarding #{@buffer.unpack("H*").first.gsub(/\h{2}/, "\\0 ")} due to timeout"
+                SDN.logger.debug "Discarding #{@buffer.unpack1("H*").gsub(/\h{2}/, "\\0 ")} due to timeout"
               end
               @buffer = ""
               return messages if timeout

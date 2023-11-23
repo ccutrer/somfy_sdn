@@ -1,4 +1,6 @@
-require 'sdn/message/helpers'
+# frozen_string_literal: true
+
+require "sdn/message/helpers"
 
 module SDN
   class MalformedMessage < RuntimeError; end
@@ -6,14 +8,16 @@ module SDN
   class Message
     class << self
       def inherited(klass)
+        super
         return Message.inherited(klass) unless self == Message
+
         @message_map = nil
         (@subclasses ||= []) << klass
       end
 
       def expected_response?(message)
-        if name =~ /::Get([A-Za-z]+)/
-          message.class.name == name.sub("::Get", "::Post")
+        if /::Get([A-Za-z]+)/.match?(name)
+          message.class.name == name.sub("::Get", "::Post") # rubocop:disable Style/ClassEqualityComparison
         else
           message.is_a?(Ack) || message.is_a?(Nack)
         end
@@ -30,6 +34,7 @@ module SDN
           return result if result
 
           return [nil, 0] if data.length - offset < 11
+
           msg = to_number(data[offset])
           length = to_number(data[offset + 1])
           ack_requested = length & 0x80 == 0x80
@@ -67,10 +72,10 @@ module SDN
 
       def message_map
         @message_map ||=
-          @subclasses.inject({}) do |memo, klass|
+          @subclasses.each_with_object({}) do |klass, memo|
             next memo unless klass.constants(false).include?(:MSG)
+
             memo[klass.const_get(:MSG, false)] = klass
-            memo
           end
       end
     end
@@ -83,7 +88,7 @@ module SDN
     def initialize(node_type: nil, ack_requested: false, src: nil, dest: nil)
       @node_type = node_type || 0
       @ack_requested = ack_requested
-      if src.nil? && !dest.nil? && is_group_address?(dest)
+      if src.nil? && !dest.nil? && group_address?(dest)
         src = dest
         dest = nil
       end
@@ -92,7 +97,11 @@ module SDN
     end
 
     def parse(params)
-      raise MalformedMessage, "unrecognized params for #{self.class.name}: #{params.map { |b| '%02x' % b }}" if self.class.const_defined?(:PARAMS_LENGTH) && params.length != self.class.const_get(:PARAMS_LENGTH)
+      return unless self.class.const_defined?(:PARAMS_LENGTH) && params.length != self.class.const_get(:PARAMS_LENGTH)
+
+      raise MalformedMessage, "unrecognized params for #{self.class.name}: #{params.map do |b|
+                                                                               format("%02x", b)
+                                                                             end}"
     end
 
     def serialize
@@ -105,25 +114,32 @@ module SDN
     end
 
     def ==(other)
-      self.serialize == other.serialize
+      serialize == other.serialize
     end
 
     def inspect
-      "#<%s @node_type=%s, @ack_requested=%s, @src=%s, @dest=%s%s>" % [self.class.name, node_type_to_string(node_type), ack_requested, print_address(src), print_address(dest), class_inspect]
+      format("#<%s @node_type=%s, @ack_requested=%s, @src=%s, @dest=%s%s>",
+             self.class.name,
+             node_type_to_string(node_type),
+             ack_requested,
+             print_address(src),
+             print_address(dest),
+             class_inspect)
     end
     alias_method :to_s, :inspect
 
     def class_inspect
-      ivars = instance_variables - [:@node_type, :@ack_requested, :@src, :@dest, :@params]
+      ivars = instance_variables - %i[@node_type @ack_requested @src @dest @params]
       return if ivars.empty?
+
       ivars.map { |iv| ", #{iv}=#{instance_variable_get(iv).inspect}" }.join
     end
 
     protected
 
-    def params; []; end
-
-    public
+    def params
+      []
+    end
 
     class SimpleRequest < Message
       PARAMS_LENGTH = 0
@@ -144,11 +160,10 @@ module SDN
                  limits_not_set: 0x22,
                  ip_not_set: 0x23,
                  out_of_range: 0x24,
-                 busy: 0xff }
-                 # 17 limits not set?
-                 # 37 not implemented? (get motor rolling speed)
-                 # 39 at limit? blocked?
-
+                 busy: 0xff }.freeze
+      # 17 limits not set?
+      # 37 not implemented? (get motor rolling speed)
+      # 39 at limit? blocked?
 
       # presumed
       attr_accessor :error_code
@@ -180,33 +195,34 @@ module SDN
         self.params = params
       end
 
-      alias parse params=
+      alias_method :parse, :params=
 
       def serialize
         # prevent serializing something we don't know
         raise NotImplementedError unless params
+
         super
       end
 
       def class_inspect
-        result = if self.class == UnknownMessage
-          result = ", @msg=%02xh" % msg 
-        else
-          super || ""
-        end
+        result = if instance_of?(UnknownMessage)
+                   format(", @msg=%02xh", msg)
+                 else
+                   super || ""
+                 end
         return result if params.empty?
 
-        result << ", @params=#{params.map { |b| "%02x" % b }.join(' ')}"
+        result << ", @params=#{params.map { |b| format("%02x", b) }.join(" ")}"
       end
     end
   end
 end
 
-require 'sdn/message/control'
-require 'sdn/message/get'
-require 'sdn/message/post'
-require 'sdn/message/set'
-require 'sdn/message/ilt2/get'
-require 'sdn/message/ilt2/master_control'
-require 'sdn/message/ilt2/post'
-require 'sdn/message/ilt2/set'
+require "sdn/message/control"
+require "sdn/message/get"
+require "sdn/message/post"
+require "sdn/message/set"
+require "sdn/message/ilt2/get"
+require "sdn/message/ilt2/master_control"
+require "sdn/message/ilt2/post"
+require "sdn/message/ilt2/set"

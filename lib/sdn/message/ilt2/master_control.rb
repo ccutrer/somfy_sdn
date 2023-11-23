@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SDN
   class Message
     module ILT2
@@ -10,12 +12,14 @@ module SDN
             return unless checksum(data[0..2]) == data[3..4]
             # no clue what's special about these
             return unless data[0..1] == [0xfa, 0x7a]
+
             klass = case data[2]
-              when 0x00; Down
-              when 0xfa; Up
-              when 0xff; Stop
-              end
+                    when 0x00 then Down
+                    when 0xfa then Up
+                    when 0xff then Stop
+                    end
             return unless klass
+
             [klass.new, 5]
           end
         end
@@ -25,10 +29,9 @@ module SDN
 
         class Stop < MasterControl
         end
- 
+
         class Up < MasterControl
         end
-
       end
     end
   end

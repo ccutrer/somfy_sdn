@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SDN
   class Message
     class GetGroupAddr < Message
@@ -18,7 +20,8 @@ module SDN
       end
 
       def group_index=(value)
-        raise ArgumentError, "group_index is out of range" unless (1..16).include?(value)
+        raise ArgumentError, "group_index is out of range" unless (1..16).cover?(value)
+
         @group_index = value
       end
 
@@ -49,7 +52,8 @@ module SDN
       end
 
       def ip=(value)
-        raise ArgumentError, "invalid IP #{value} (should be 1-16)" unless (1..16).include?(value)
+        raise ArgumentError, "invalid IP #{value} (should be 1-16)" unless (1..16).cover?(value)
+
         @ip = value
       end
 

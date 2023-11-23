@@ -1,24 +1,26 @@
-require 'logger'
+# frozen_string_literal: true
 
-require 'sdn/client'
-require 'sdn/message'
+require "logger"
+
+require "sdn/client"
+require "sdn/message"
 
 module SDN
-  BROADCAST_ADDRESS = [0xff, 0xff, 0xff]
+  BROADCAST_ADDRESS = [0xff, 0xff, 0xff].freeze
 
   class << self
     def logger=(logger)
-      logger.datetime_format = '%Y-%m-%d %H:%M:%S.%L'
-      logger.formatter = proc do |severity, datetime, progname, msg|
-        "#{datetime.strftime(logger.datetime_format)} [#{Process.pid}/#{Thread.current.object_id}] #{severity}: #{msg}\n"
+      logger.datetime_format = "%Y-%m-%d %H:%M:%S.%L"
+      logger.formatter = proc do |severity, datetime, _progname, msg|
+        "#{datetime.strftime(logger.datetime_format)} " \
+          "[#{Process.pid}/#{Thread.current.object_id}] " \
+          "#{severity}: #{msg}\n"
       end
       @logger = logger
     end
 
     def logger
-      unless @logger
-        self.logger = Logger.new(STDOUT, :info)
-      end
+      self.logger = Logger.new($stdout, :info) unless @logger
       @logger
     end
   end

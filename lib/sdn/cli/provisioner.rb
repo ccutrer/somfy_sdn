@@ -1,4 +1,6 @@
-require 'curses'
+# frozen_string_literal: true
+
+require "curses"
 
 module SDN
   module CLI
@@ -24,10 +26,11 @@ module SDN
         message = sdn.ensure(Message::GetNodeLabel.new(addr))
 
         node_type = message.node_type
-        @ns = ns = node_type == :st50ilt2 ? Message::ILT2 : Message
+        @ns = ns = (node_type == :st50ilt2) ? Message::ILT2 : Message
 
-        print "Motor is currently labeled '#{message.label}'; what would you like to change it to (blank to leave alone)? "
-        new_label = STDIN.gets
+        print "Motor is currently labeled '#{message.label}'; " \
+              "what would you like to change it to (blank to leave alone)? "
+        new_label = $stdin.gets
 
         unless new_label == "\n"
           new_label.strip!
@@ -52,7 +55,7 @@ module SDN
           Curses.nonl
           Curses.curs_set(0)
           @win = Curses.stdscr
-      
+
           process
         rescue Interrupt
           # exitting
@@ -96,7 +99,10 @@ module SDN
             wait_for_stop
           when Curses::Key::LEFT
             if @pos < @pulse_count
-              sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @limit + @pulse_count - @pos, @pulse_count))
+              sdn.ensure(Message::ILT2::SetMotorSettings.new(addr,
+                                                             reversed_int,
+                                                             @limit + @pulse_count - @pos,
+                                                             @pulse_count))
               refresh
             end
             if ilt2?
@@ -116,21 +122,21 @@ module SDN
               sdn.ensure(Message::MoveOf.new(addr, :jog_down_pulses, @pulse_count))
             end
             wait_for_stop
-          when 'u'
+          when "u"
             if ilt2?
               sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @limit - @pos, 0))
             else
               sdn.ensure(Message::SetMotorLimits.new(addr, :current_position, :up))
             end
             refresh
-          when 'l'
+          when "l"
             if ilt2?
               sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @pos, @pos))
             else
               sdn.ensure(Message::SetMotorLimits.new(addr, :current_position, :down))
             end
             refresh
-          when 'r'
+          when "r"
             @reversed = !@reversed
             if ilt2?
               sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @limit, @limit - @pos))
@@ -138,24 +144,24 @@ module SDN
               sdn.ensure(Message::SetMotorDirection.new(addr, @reversed ? :reversed : :standard))
             end
             refresh
-          when 'R'
+          when "R"
             next unless ilt2?
 
             @reversed = !@reversed
             sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @limit, @pos))
             refresh
-          when '!'
+          when "!"
             next if ilt2?
 
             sdn.send(Message::SetFactoryDefault.new(addr))
             break
-          when '<'
+          when "<"
             @pulse_count /= 2 if @pulse_count > 5
             print_help
-          when '>'
+          when ">"
             @pulse_count *= 2
             print_help
-          when 'q'
+          when "q"
             break
           end
         end
@@ -163,19 +169,19 @@ module SDN
 
       def print_help
         win.setpos(0, 0)
-        win.addstr(<<-INSTRUCTIONS)
-Move the motor. Keys:
-Esc  stop movement
-\u2191    go to upper limit
-\u2193    go to lower limit
-\u2190    jog up #{@pulse_count} pulses
-\u2192    jog down #{@pulse_count} pulses
->    increase jog size
-<    decrease jog size
-u    set upper limit at current position
-l    set lower limit at current position
-r    reverse motor
-        INSTRUCTIONS
+        win.addstr(<<~TEXT)
+          Move the motor. Keys:
+          Esc  stop movement
+          \u2191    go to upper limit
+          \u2193    go to lower limit
+          \u2190    jog up #{@pulse_count} pulses
+          \u2192    jog down #{@pulse_count} pulses
+          >    increase jog size
+          <    decrease jog size
+          u    set upper limit at current position
+          l    set lower limit at current position
+          r    reverse motor
+        TEXT
 
         if ilt2?
           win.addstr("R    reverse motor (but leave position alone)\n")
@@ -185,7 +191,7 @@ r    reverse motor
         win.addstr("q    quit\n")
         win.refresh
       end
-      
+
       def wait_for_stop
         win.setpos(13, 0)
         win.addstr("Moving...\n")
@@ -201,7 +207,6 @@ r    reverse motor
           end
 
           sdn.receive(0.1) do |message|
-
             if message.is_a?(ns::PostMotorPosition)
               last_pos = @pos
               @pos = message.position_pulses
@@ -216,7 +221,7 @@ r    reverse motor
               win.addstr("\n")
               win.nodelay = false
               refresh
-              return
+              return # rubocop:disable Lint/NonLocalExitFromIterator
             end
           end
           sleep 0.1

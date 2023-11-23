@@ -1,0 +1,26 @@
+inherit_gem:
+  rubocop-inst:
+  - rubocop.yml
+
+require:
+  - rubocop-rake
+
+AllCops:
+  TargetRubyVersion: 2.5
+  NewCops: enable
+
+Gemspec/DevelopmentDependencies:
+  EnforcedStyle: gemspec
+
+Naming/FileName:
+  Exclude:
+    - lib/homie-mqtt.rb
+
+Style/BlockDelimiters:
+  AllowedMethods: []
+Style/Documentation:
+  Enabled: false
+Style/FormatStringToken:
+  Enabled: false
+Style/MultilineBlockChain:
+  Enabled: false

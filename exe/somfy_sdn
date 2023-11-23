@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 
-require 'somfy_sdn'
-require 'thor'
+require "somfy_sdn"
+require "thor"
 
 class SomfySDNCLI < Thor
   class_option :verbose, type: :boolean, default: false, desc: "Log protocol messages"
@@ -27,19 +28,20 @@ class SomfySDNCLI < Thor
   def mqtt(port, mqtt_uri)
     sdn = handle_global_options(port)
 
-    require 'sdn/cli/mqtt'
+    require "sdn/cli/mqtt"
 
-    SDN::CLI::MQTT.new(sdn, mqtt_uri,
-      device_id: options["device-id"],
-      base_topic: options["base-topic"],
-      auto_discover: options["auto-discover"])
+    SDN::CLI::MQTT.new(sdn,
+                       mqtt_uri,
+                       device_id: options["device-id"],
+                       base_topic: options["base-topic"],
+                       auto_discover: options["auto-discover"])
   end
 
   desc "provision PORT [ADDRESS]", "Provision a motor (label and set limits) at PORT"
   def provision(port, address = nil)
     sdn = handle_global_options(port)
 
-    require 'sdn/cli/provisioner'
+    require "sdn/cli/provisioner"
     SDN::CLI::Provisioner.new(sdn, address)
   end
 
@@ -48,16 +50,14 @@ class SomfySDNCLI < Thor
     options[:verbose] = true
     sdn = handle_global_options(port)
 
-    require 'sdn/cli/simulator'
+    require "sdn/cli/simulator"
     SDN::CLI::Simulator.new(sdn, address)
   end
 
   private
 
   def handle_global_options(port)
-    if options[:log]
-      SDN.logger = Logger.new(options[:log])
-    end
+    SDN.logger = Logger.new(options[:log]) if options[:log]
     options[:verbose] = true if options[:trace]
     SDN.logger.level = options[:verbose] ? :debug : :info
 
@@ -65,4 +65,4 @@ class SomfySDNCLI < Thor
   end
 end
 
-SomfySDNCLI.start(ARGV)   
+SomfySDNCLI.start(ARGV)

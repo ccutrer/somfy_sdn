@@ -1,12 +1,14 @@
-require 'mqtt'
-require 'uri'
-require 'set'
+# frozen_string_literal: true
 
-require 'sdn/cli/mqtt/group'
-require 'sdn/cli/mqtt/motor'
-require 'sdn/cli/mqtt/read'
-require 'sdn/cli/mqtt/write'
-require 'sdn/cli/mqtt/subscriptions'
+require "mqtt"
+require "uri"
+require "set"
+
+require "sdn/cli/mqtt/group"
+require "sdn/cli/mqtt/motor"
+require "sdn/cli/mqtt/read"
+require "sdn/cli/mqtt/write"
+require "sdn/cli/mqtt/subscriptions"
 
 module SDN
   module CLI
@@ -46,8 +48,8 @@ module SDN
         @sdn = sdn
 
         Thread.abort_on_exception = true
-        read_thread = Thread.new { read }
-        write_thread = Thread.new { write }
+        Thread.new { read }
+        Thread.new { write }
         @mqtt.get { |packet| handle_message(packet.topic, packet.payload) }
       end
 
@@ -72,7 +74,7 @@ module SDN
       def clear_tree(topic)
         @mqtt.subscribe("#{topic}/#")
         @mqtt.unsubscribe("#{topic}/#", wait_for_ack: true)
-        while !@mqtt.queue_empty?
+        until @mqtt.queue_empty?
           packet = @mqtt.get
           @mqtt.publish(packet.topic, nil, retain: true)
         end
@@ -136,7 +138,7 @@ module SDN
         @mqtt.batch_publish do
           publish("#{addr}/$name", addr)
           publish("#{addr}/$type", node_type.to_s)
-          properties = %w{
+          properties = %w[
             discover
             label
             state
@@ -149,19 +151,17 @@ module SDN
             down-limit
             groups
             last-direction
-          } + (1..16).map { |ip| ["ip#{ip}-pulses", "ip#{ip}-percent"] }.flatten
+          ] + (1..16).map { |ip| ["ip#{ip}-pulses", "ip#{ip}-percent"] }.flatten
 
           unless node_type == :st50ilt2
-            properties.concat %w{
-              reset
-              last-action-source
-              last-action-cause
-              up-limit
-              direction
-              up-speed
-              down-speed
-              slow-speed
-            }
+            properties.push("reset",
+                            "last-action-source",
+                            "last-action-cause",
+                            "up-limit",
+                            "direction",
+                            "up-speed",
+                            "down-speed",
+                            "slow-speed")
           end
 
           publish("#{addr}/$properties", properties.join(","))
@@ -178,7 +178,7 @@ module SDN
 
           publish("#{addr}/state/$name", "Current state of the motor")
           publish("#{addr}/state/$datatype", "enum")
-          publish("#{addr}/state/$format", Message::PostMotorStatus::STATE.keys.join(','))
+          publish("#{addr}/state/$format", Message::PostMotorStatus::STATE.keys.join(","))
 
           publish("#{addr}/control/$name", "Control motor")
           publish("#{addr}/control/$datatype", "enum")
@@ -226,22 +226,22 @@ module SDN
 
           publish("#{addr}/last-direction/$name", "Direction of last motion")
           publish("#{addr}/last-direction/$datatype", "enum")
-          publish("#{addr}/last-direction/$format", Message::PostMotorStatus::DIRECTION.keys.join(','))
+          publish("#{addr}/last-direction/$format", Message::PostMotorStatus::DIRECTION.keys.join(","))
 
           unless node_type == :st50ilt2
             publish("#{addr}/reset/$name", "Recall factory settings")
             publish("#{addr}/reset/$datatype", "enum")
-            publish("#{addr}/reset/$format", Message::SetFactoryDefault::RESET.keys.join(','))
+            publish("#{addr}/reset/$format", Message::SetFactoryDefault::RESET.keys.join(","))
             publish("#{addr}/reset/$settable", "true")
             publish("#{addr}/reset/$retained", "false")
 
             publish("#{addr}/last-action-source/$name", "Source of last action")
             publish("#{addr}/last-action-source/$datatype", "enum")
-            publish("#{addr}/last-action-source/$format", Message::PostMotorStatus::SOURCE.keys.join(','))
+            publish("#{addr}/last-action-source/$format", Message::PostMotorStatus::SOURCE.keys.join(","))
 
             publish("#{addr}/last-action-cause/$name", "Cause of last action")
             publish("#{addr}/last-action-cause/$datatype", "enum")
-            publish("#{addr}/last-action-cause/$format", Message::PostMotorStatus::CAUSE.keys.join(','))
+            publish("#{addr}/last-action-cause/$format", Message::PostMotorStatus::CAUSE.keys.join(","))
 
             publish("#{addr}/up-limit/$name", "Up limit (always = 0)")
             publish("#{addr}/up-limit/$datatype", "integer")
@@ -309,7 +309,9 @@ module SDN
           when :st50ilt2
             @queues[2].push(MessageAndRetries.new(Message::ILT2::GetMotorSettings.new(sdn_addr), 5, 2))
             @queues[2].push(MessageAndRetries.new(Message::ILT2::GetMotorPosition.new(sdn_addr), 5, 2))
-            (1..16).each { |ip| @queues[2].push(MessageAndRetries.new(Message::ILT2::GetMotorIP.new(sdn_addr, ip), 5, 2)) }
+            (1..16).each do |ip|
+              @queues[2].push(MessageAndRetries.new(Message::ILT2::GetMotorIP.new(sdn_addr, ip), 5, 2))
+            end
           end
           (1..16).each { |g| @queues[2].push(MessageAndRetries.new(Message::GetGroupAddr.new(sdn_addr, g), 5, 2)) }
 
@@ -320,19 +322,21 @@ module SDN
       end
 
       def touch_group(group_addr)
-        group = @groups[Message.print_address(group_addr).gsub('.', '')]
+        group = @groups[Message.print_address(group_addr).delete(".")]
         group&.publish(:motors, group.motors_string)
       end
 
       def add_group(addr)
-        addr = addr.gsub('.', '')
+        addr = addr.delete(".")
         group = @groups[addr]
         return group if group
 
         @mqtt.batch_publish do
           publish("#{addr}/$name", addr)
           publish("#{addr}/$type", "Shade Group")
-          publish("#{addr}/$properties", "discover,control,jog-ms,jog-pulses,position-pulses,position-percent,ip,reset,state,last-direction,motors")
+          publish("#{addr}/$properties",
+                  "discover,control,jog-ms,jog-pulses,position-pulses,position-percent," \
+                  "ip,reset,state,last-direction,motors")
 
           publish("#{addr}/discover/$name", "Trigger Motor Discovery")
           publish("#{addr}/discover/$datatype", "enum")
@@ -379,11 +383,11 @@ module SDN
 
           publish("#{addr}/state/$name", "State of the motors")
           publish("#{addr}/state/$datatype", "enum")
-          publish("#{addr}/state/$format", Message::PostMotorStatus::STATE.keys.join(',')  + ",mixed")
+          publish("#{addr}/state/$format", "#{Message::PostMotorStatus::STATE.keys.join(",")},mixed")
 
           publish("#{addr}/last-direction/$name", "Direction of last motion")
           publish("#{addr}/last-direction/$datatype", "enum")
-          publish("#{addr}/last-direction/$format", Message::PostMotorStatus::DIRECTION.keys.join(',')  + ",mixed")
+          publish("#{addr}/last-direction/$format", "#{Message::PostMotorStatus::DIRECTION.keys.join(",")},mixed")
 
           publish("#{addr}/motors/$name", "Comma separated motor addresses that are members of this group")
           publish("#{addr}/motors/$datatype", "string")

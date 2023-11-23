@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SDN
   module CLI
     class MQTT
@@ -58,14 +60,14 @@ module SDN
           @groups = [].fill(nil, 0, 16)
           super
         end
-    
+
         def publish(attribute, value)
-          if self[attribute] != value
-            bridge.publish("#{addr}/#{attribute.to_s.gsub('_', '-')}", value.to_s)
-            self[attribute] = value
-          end
+          return unless self[attribute] != value
+
+          bridge.publish("#{addr}/#{attribute.to_s.tr("_", "-")}", value.to_s)
+          self[attribute] = value
         end
-    
+
         def add_group(index, address)
           group = bridge.add_group(Message.print_address(address)) if address
           old_group = @groups[index - 1]
@@ -74,10 +76,13 @@ module SDN
           publish(:groups, groups_string)
           bridge.touch_group(old_group) if old_group
         end
-    
-        def set_groups(groups)
-          return unless groups =~ /^(?:\h{2}[:.]?\h{2}[:.]?\h{2}(?:,\h{2}[:.]?\h{2}[:.]?\h{2})*)?$/i
-          groups = groups.split(',').sort.uniq.map { |g| Message.parse_address(g) }.select { |g| Message.is_group_address?(g) }
+
+        def set_groups(groups) # rubocop:disable Naming/AccessorMethodName
+          return unless /^(?:\h{2}[:.]?\h{2}[:.]?\h{2}(?:,\h{2}[:.]?\h{2}[:.]?\h{2})*)?$/i.match?(groups)
+
+          groups = groups.split(",").sort.uniq.map do |g|
+                     Message.parse_address(g)
+                   end.select { |g| Message.group_address?(g) }
           groups.fill(nil, groups.length, 16 - groups.length)
           messages = []
           sdn_addr = Message.parse_address(addr)
@@ -89,13 +94,13 @@ module SDN
           end
           messages
         end
-    
+
         def groups_string
-          @groups.compact.map { |g| Message.print_address(g) }.sort.uniq.join(',')
+          @groups.compact.map { |g| Message.print_address(g) }.sort.uniq.join(",")
         end
-    
+
         def group_objects
-          groups_string.split(',').map { |addr| bridge.groups[addr.gsub('.', '')] }
+          groups_string.split(",").map { |addr| bridge.groups[addr.delete(".")] }
         end
       end
     end

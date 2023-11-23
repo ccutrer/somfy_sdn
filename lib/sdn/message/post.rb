@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SDN
   class Message
     class PostGroupAddr < Message
@@ -24,7 +26,7 @@ module SDN
       end
 
       def class_inspect
-        ", group_index=#{group_index.inspect}, group_address=#{group_address ? print_address(group_address) : 'nil'}"
+        ", group_index=#{group_index.inspect}, group_address=#{group_address ? print_address(group_address) : "nil"}"
       end
     end
 
@@ -160,10 +162,6 @@ module SDN
     class PostNetworkLock < UnknownMessage
       MSG = 0x36
       PARAMS_LENGTH = 5
-
-      def parse(params)
-        super
-      end
     end
 
     class PostNodeAddr < Message

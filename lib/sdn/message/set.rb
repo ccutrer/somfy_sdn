@@ -1,9 +1,17 @@
+# frozen_string_literal: true
+
 module SDN
   class Message
     class SetFactoryDefault < Message
       MSG = 0x1f
       PARAMS_LENGTH = 1
-      RESET = { all_settings: 0x00, group_addresses: 0x01, limits: 0x11, rotation: 0x12, rolling_speed: 0x13, ips: 0x15, locks: 0x17 }
+      RESET = { all_settings: 0x00,
+                group_addresses: 0x01,
+                limits: 0x11,
+                rotation: 0x12,
+                rolling_speed: 0x13,
+                ips: 0x15,
+                locks: 0x17 }.freeze
 
       attr_reader :reset
 
@@ -19,7 +27,11 @@ module SDN
       end
 
       def reset=(value)
-        raise ArgumentError, "reset must be one of :all_settings, :group_addresses, :limits, :rotation, :rolling_speed, :ips, :locks" unless RESET.keys.include?(value)
+        unless RESET.key?(value)
+          raise ArgumentError,
+                "reset must be one of :all_settings, :group_addresses, :limits, :rotation, :rolling_speed, :ips, :locks"
+        end
+
         @reset = value
       end
 
@@ -32,7 +44,8 @@ module SDN
       MSG = 0x51
       PARAMS_LENGTH = 4
 
-      attr_reader :group_index, :group_address
+      attr_accessor :group_address
+      attr_reader :group_index
 
       def initialize(dest = nil, group_index = 1, group_address = nil, **kwargs)
         kwargs[:dest] ||= dest
@@ -48,12 +61,9 @@ module SDN
       end
 
       def group_index=(value)
-        raise ArgumentError, "group_index is out of range" unless (1..16).include?(value)
-        @group_index = value
-      end
+        raise ArgumentError, "group_index is out of range" unless (1..16).cover?(value)
 
-      def group_address=(value)
-        @group_address = value
+        @group_index = value
       end
 
       def params
@@ -61,7 +71,7 @@ module SDN
       end
 
       def class_inspect
-        ", group_index=#{group_index.inspect}, group_address=#{group_address ? print_address(group_address) : 'nil'}"
+        ", group_index=#{group_index.inspect}, group_address=#{group_address ? print_address(group_address) : "nil"}"
       end
     end
 
@@ -84,7 +94,8 @@ module SDN
       end
 
       def direction=(value)
-        raise ArgumentError, "direction must be one of :standard, :reversed" unless DIRECTION.keys.include?(value)
+        raise ArgumentError, "direction must be one of :standard, :reversed" unless DIRECTION.key?(value)
+
         @direction = value
       end
 
@@ -97,7 +108,11 @@ module SDN
       MSG = 0x15
       PARAMS_LENGTH = 4
       # for distribute, value is how many IPs to distribute over
-      TYPE = { delete: 0x00, current_position: 0x01, position_pulses: 0x02, position_percent: 0x03, distribute: 0x04 }.freeze
+      TYPE = { delete: 0x00,
+               current_position: 0x01,
+               position_pulses: 0x02,
+               position_percent: 0x03,
+               distribute: 0x04 }.freeze
 
       attr_reader :type, :ip, :value
 
@@ -113,23 +128,28 @@ module SDN
         super
         self.type = TYPE.invert[to_number(params[0])]
         ip = to_number(params[1])
-        ip = nil if ip == 0
+        ip = nil if ip.zero?
         self.ip = ip
         self.value = to_number(params[2..3])
       end
 
       def type=(value)
-        raise ArgumentError, "type must be one of :delete, :current_position, :position_pulses, :position_percent, :distribute" unless TYPE.keys.include?(value)
+        unless TYPE.key?(value)
+          raise ArgumentError,
+                "type must be one of :delete, :current_position, :position_pulses, :position_percent, :distribute"
+        end
+
         @type = value
       end
 
       def ip=(value)
-        raise ArgumentError, "ip must be in range 1..16 or nil" unless ip.nil? || (1..16).include?(ip)
+        raise ArgumentError, "ip must be in range 1..16 or nil" unless ip.nil? || (1..16).cover?(ip)
+
         @ip = value
       end
 
       def value=(value)
-        @value = value &. & 0xffff
+        @value = value&.& 0xffff
       end
 
       def params
@@ -140,8 +160,8 @@ module SDN
     class SetMotorLimits < Message
       MSG = 0x11
       PARAMS_LENGTH = 4
-      TYPE = { delete: 0x00, current_position: 0x01, specified_position: 0x02, jog_ms: 0x04, jog_pulses: 0x05 }
-      TARGET = { down: 0x00, up: 0x01 }
+      TYPE = { delete: 0x00, current_position: 0x01, specified_position: 0x02, jog_ms: 0x04, jog_pulses: 0x05 }.freeze
+      TARGET = { down: 0x00, up: 0x01 }.freeze
 
       attr_reader :type, :target, :value
 
@@ -161,17 +181,22 @@ module SDN
       end
 
       def type=(value)
-        raise ArgumentError, "type must be one of :delete, :current_position, :specified_position, :jog_ms, :jog_pulses" unless TYPE.keys.include?(value)
+        unless TYPE.key?(value)
+          raise ArgumentError,
+                "type must be one of :delete, :current_position, :specified_position, :jog_ms, :jog_pulses"
+        end
+
         @type = value
       end
 
       def target=(value)
-        raise ArgumentError, "target must be one of :up, :down" unless TARGET.keys.include?(value)
+        raise ArgumentError, "target must be one of :up, :down" unless TARGET.key?(value)
+
         @target = value
       end
 
       def value=(value)
-        @value = value&. & 0xffff
+        @value = value&.& 0xffff
       end
 
       def params
@@ -186,6 +211,7 @@ module SDN
       PARAMS_LENGTH = 3
 
       attr_accessor :up_speed, :down_speed, :slow_speed
+
       def initialize(dest = nil, up_speed: nil, down_speed: nil, slow_speed: nil, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
@@ -212,7 +238,7 @@ module SDN
       attr_accessor :locked, :priority
 
       def parse(params)
-        self.locked = to_number(params[0]) == 1 ? true : false
+        self.locked = to_number(params[0]) == 1
         self.priority = to_number(params[1])
       end
 
@@ -227,7 +253,7 @@ module SDN
 
       attr_accessor :label
 
-      def initialize(dest = nil, label = '', **kwargs)
+      def initialize(dest = nil, label = "", **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
         self.label = label

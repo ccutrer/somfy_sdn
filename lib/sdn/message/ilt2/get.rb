@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SDN
   class Message
     module ILT2
@@ -22,15 +24,16 @@ module SDN
         end
 
         def ip=(value)
-          raise ArgumentError, "invalid IP #{value} (should be 1-16)" unless (1..16).include?(value)
+          raise ArgumentError, "invalid IP #{value} (should be 1-16)" unless (1..16).cover?(value)
+
           @ip = value
         end
-  
+
         def parse(params)
           super
           self.ip = to_number(params[0]) + 1
         end
-  
+
         def params
           transform_param(@ip - 1)
         end
