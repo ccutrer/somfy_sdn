@@ -60,7 +60,7 @@ class SomfySDNCLI < Thor
 
   def handle_global_options(port)
     SDN.logger = Logger.new(options[:log]) if options[:log]
-    SDN.logger.level = options[:verbose] || options[:trace] ? :debug : :info
+    SDN.logger.level = (options[:verbose] || options[:trace]) ? :debug : :info
 
     SDN::Client.new(port).tap { |sdn| sdn.trace = options[:trace] }
   end

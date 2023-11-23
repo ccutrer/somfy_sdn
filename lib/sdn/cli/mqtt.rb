@@ -331,16 +331,19 @@ module SDN
             @queue.push(MessageAndRetries.new(Message::GetMotorLimits.new(sdn_addr), 5, 2))
             @queue.push(MessageAndRetries.new(Message::GetMotorDirection.new(sdn_addr), 5, 3))
             @queue.push(MessageAndRetries.new(Message::GetMotorRollingSpeed.new(sdn_addr), 5, 3))
-            (1..16).each { |ip| 
-            @queue.push(MessageAndRetries.new(Message::GetMotorIP.new(sdn_addr, ip), 5, 2 * ip + 3)) }
+            (1..16).each do |ip|
+              @queue.push(MessageAndRetries.new(Message::GetMotorIP.new(sdn_addr, ip), 5, (2 * ip) + 3))
+            end
           when :st50ilt2
             @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorSettings.new(sdn_addr), 5, 2))
             @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorPosition.new(sdn_addr), 5, 2))
             (1..16).each do |ip|
-              @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorIP.new(sdn_addr, ip), 5, 2 * ip + 3))
+              @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorIP.new(sdn_addr, ip), 5, (2 * ip) + 3))
             end
           end
-          (1..16).each { |g| @queue.push(MessageAndRetries.new(Message::GetGroupAddr.new(sdn_addr, g), 5, 2 * g + 2)) }
+          (1..16).each do |g|
+            @queue.push(MessageAndRetries.new(Message::GetGroupAddr.new(sdn_addr, g), 5, (2 * g) + 2))
+          end
 
           @cond.signal
         end
