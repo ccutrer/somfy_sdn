@@ -178,14 +178,11 @@ module SDN
           message.src = address
           message.node_type = node_type
           message.dest = dest
-          SDN.logger.info "Sending #{message.inspect}"
           @client.send(message)
         end
       end
 
-      def initialize(port, address = nil)
-        sdn = Client.new(port)
-
+      def initialize(sdn, address = nil)
         motor = MockMotor.new(sdn)
         motor.address = Message.parse_address(address) if address
         motor.node_type = :lt50

@@ -57,7 +57,7 @@ module SDN
           result.parse(data.slice(offset + 9, length - 11))
           result.msg = msg if message_class == UnknownMessage
         rescue ArgumentError => e
-          SDN.logger.warn "discarding illegal message of type #{message_class.name}: #{e}"
+          SDN.logger.warn "Discarding illegal message of type #{message_class.name}: #{e}"
           result = nil
         end
         [result, offset + length]

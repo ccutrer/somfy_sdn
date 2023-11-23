@@ -2,6 +2,8 @@ require 'io/wait'
 
 module SDN
   class Client
+    attr_writer :trace
+
     def initialize(port)
       uri = URI.parse(port)
       @io = if uri.scheme == "tcp"
@@ -27,7 +29,12 @@ module SDN
       @buffer = ""
     end
 
+    def trace?
+      @trace
+    end
+
     def send(message)
+      SDN.logger.debug("Sending #{message.inspect}")
       @io.write(message.serialize)
     end
 
@@ -63,7 +70,7 @@ module SDN
           eofs = 0
           begin
             block = @io.read_nonblock(64 * 1024)
-            SDN.logger.debug "read #{block.unpack("H*").first.gsub(/\h{2}/, "\\0 ")}"
+            SDN.logger.debug("Read #{block.unpack("H*").first.gsub(/\h{2}/, "\\0 ")}") if trace?
             @buffer.concat(block)
             next
           rescue IO::WaitReadable, EOFError => e
@@ -77,7 +84,9 @@ module SDN
             wait = @buffer.empty? ? timeout : WAIT_TIME
             if @io.wait_readable(wait).nil?
               # timed out; just discard everything
-              SDN.logger.debug "discarding #{@buffer.unpack("H*").first.gsub(/\h{2}/, "\\0 ")} due to timeout"
+              unless @buffer.empty?
+                SDN.logger.debug "Discarding #{@buffer.unpack("H*").first.gsub(/\h{2}/, "\\0 ")} due to timeout"
+              end
               @buffer = ""
               return messages if timeout
             end
@@ -86,6 +95,8 @@ module SDN
           end
           next
         end
+
+        SDN.logger.debug("Received message #{message.inspect}")
         if block_given?
           yield message
         else

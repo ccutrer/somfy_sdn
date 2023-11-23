@@ -5,8 +5,8 @@ module SDN
     class Provisioner
       attr_reader :win, :sdn, :addr, :ns
 
-      def initialize(port, addr = nil)
-        @sdn = Client.new(port)
+      def initialize(sdn, addr = nil)
+        @sdn = sdn
         @reversed = false
         @pulse_count = 10
 
@@ -54,6 +54,8 @@ module SDN
           @win = Curses.stdscr
       
           process
+        rescue Interrupt
+          # exitting
         rescue => e
           win.setpos(0, 0)
           win.addstr(e.inspect)
@@ -97,14 +99,22 @@ module SDN
               sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @limit + @pulse_count - @pos, @pulse_count))
               refresh
             end
-            sdn.ensure(Message::ILT2::SetMotorPosition.new(addr, :jog_up_pulses, @pulse_count))
+            if ilt2?
+              sdn.ensure(Message::ILT2::SetMotorPosition.new(addr, :jog_up_pulses, @pulse_count))
+            else
+              sdn.ensure(Message::MoveOf.new(addr, :jog_up_pulses, @pulse_count))
+            end
             wait_for_stop
           when Curses::Key::RIGHT
             if @limit - @pos < @pulse_count
               sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @pos + @pulse_count, @pos))
               refresh
             end
-            sdn.ensure(Message::ILT2::SetMotorPosition.new(addr, :jog_down_pulses, @pulse_count))
+            if ilt2?
+              sdn.ensure(Message::ILT2::SetMotorPosition.new(addr, :jog_down_pulses, @pulse_count))
+            else
+              sdn.ensure(Message::MoveOf.new(addr, :jog_down_pulses, @pulse_count))
+            end
             wait_for_stop
           when 'u'
             if ilt2?
@@ -130,9 +140,15 @@ module SDN
             refresh
           when 'R'
             next unless ilt2?
+
             @reversed = !@reversed
             sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @limit, @pos))
             refresh
+          when '!'
+            next if ilt2?
+
+            sdn.send(Message::SetFactoryDefault.new(addr))
+            break
           when '<'
             @pulse_count /= 2 if @pulse_count > 5
             print_help
@@ -163,6 +179,8 @@ r    reverse motor
 
         if ilt2?
           win.addstr("R    reverse motor (but leave position alone)\n")
+        else
+          win.addstr("!    factory reset\n")
         end
         win.addstr("q    quit\n")
         win.refresh

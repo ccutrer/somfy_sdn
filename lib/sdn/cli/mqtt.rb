@@ -22,7 +22,7 @@ module SDN
 
       attr_reader :motors, :groups
 
-      def initialize(port, mqtt_uri, device_id: "somfy", base_topic: "homie", auto_discover: true)
+      def initialize(sdn, mqtt_uri, device_id: "somfy", base_topic: "homie", auto_discover: true)
         @base_topic = "#{base_topic}/#{device_id}"
         @mqtt = ::MQTT::Client.new(mqtt_uri)
         @mqtt.set_will("#{@base_topic}/$state", "lost", retain: true)
@@ -43,7 +43,7 @@ module SDN
         clear_tree(@base_topic)
         publish_basic_attributes
 
-        @sdn = Client.new(port)
+        @sdn = sdn
 
         Thread.abort_on_exception = true
         read_thread = Thread.new { read }

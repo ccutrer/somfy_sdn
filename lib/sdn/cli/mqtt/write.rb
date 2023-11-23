@@ -13,13 +13,13 @@ module SDN
                 while @response_pending
                   remaining_wait = @response_pending - Time.now.to_f
                   if remaining_wait < 0
-                    SDN.logger.debug "timed out waiting on response"
+                    SDN.logger.debug "Timed out waiting on response"
                     @response_pending = nil
                     @broadcast_pending = nil
                     if @prior_message && @prior_message&.remaining_retries != 0
-                      SDN.logger.debug "retrying #{@prior_message.remaining_retries} more times ..."
+                      SDN.logger.debug "Retrying #{@prior_message.remaining_retries} more times ..."
                       if Message.is_group_address?(@prior_message.message.src) && !@pending_group_motors.empty?
-                        SDN.logger.debug "re-targetting group message to individual motors"
+                        SDN.logger.debug "Re-targetting group message to individual motors"
                         @pending_group_motors.each do |addr|
                           new_message = @prior_message.message.dup
                           new_message.src = [0, 0, 1]
@@ -75,7 +75,6 @@ module SDN
             next unless message_and_retries
 
             message = message_and_retries.message
-            SDN.logger.info "writing #{message.inspect}"
             # minimum time between messages
             now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
             sleep_time = 0.1 - (now - last_write_at)
@@ -84,7 +83,7 @@ module SDN
             last_write_at = now
           end
         rescue => e
-          SDN.logger.fatal "failure writing: #{e}: #{e.backtrace}"
+          SDN.logger.fatal "Failure writing: #{e}: #{e.backtrace}"
           exit 1
         end
       end

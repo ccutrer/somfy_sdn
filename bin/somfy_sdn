@@ -4,17 +4,18 @@ require 'somfy_sdn'
 require 'thor'
 
 class SomfySDNCLI < Thor
-  class_option :verbose, type: :boolean, default: false
+  class_option :verbose, type: :boolean, default: false, desc: "Log protocol messages"
+  class_option :trace, type: :boolean, default: false, desc: "Log protocol bytes"
+  class_option :log, type: :string, desc: "Log to a file"
 
   desc "monitor PORT", "Monitor traffic on the SDN network at PORT"
   def monitor(port)
-    handle_global_options
-
-    sdn = SDN::Client.new(port)
+    options[:verbose] = true
+    sdn = handle_global_options(port)
 
     loop do
       sdn.receive do |message|
-        SDN.logger.info "Received message #{message.inspect}"
+        # do nothing
       end
     end
   end
@@ -24,11 +25,11 @@ class SomfySDNCLI < Thor
   option :"base-topic", default: "homie", desc: "The base Homie topic"
   option :"auto-discover", type: :boolean, default: true, desc: "Do a discovery at startup"
   def mqtt(port, mqtt_uri)
-    handle_global_options
+    sdn = handle_global_options(port)
 
     require 'sdn/cli/mqtt'
 
-    SDN::CLI::MQTT.new(port, mqtt_uri,
+    SDN::CLI::MQTT.new(sdn, mqtt_uri,
       device_id: options["device-id"],
       base_topic: options["base-topic"],
       auto_discover: options["auto-discover"])
@@ -36,24 +37,31 @@ class SomfySDNCLI < Thor
 
   desc "provision PORT [ADDRESS]", "Provision a motor (label and set limits) at PORT"
   def provision(port, address = nil)
-    handle_global_options
+    sdn = handle_global_options(port)
 
     require 'sdn/cli/provisioner'
-    SDN::CLI::Provisioner.new(port, address)
+    SDN::CLI::Provisioner.new(sdn, address)
   end
 
   desc "simulator PORT [ADDRESS]", "Simulate a motor (for debugging purposes) at PORT"
   def simulator(port, address = nil)
-    handle_global_options
+    options[:verbose] = true
+    sdn = handle_global_options(port)
 
     require 'sdn/cli/simulator'
-    SDN::CLI::Simulator.new(port, address)
+    SDN::CLI::Simulator.new(sdn, address)
   end
 
   private
 
-  def handle_global_options
+  def handle_global_options(port)
+    if options[:log]
+      SDN.logger = Logger.new(options[:log])
+    end
+    options[:verbose] = true if options[:trace]
     SDN.logger.level = options[:verbose] ? :debug : :info
+
+    SDN::Client.new(port).tap { |sdn| sdn.trace = options[:trace] }
   end
 end
 

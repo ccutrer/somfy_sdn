@@ -7,12 +7,10 @@ module SDN
             begin
               @sdn.receive do |message|
                 @mqtt.batch_publish do
-                  SDN.logger.info "read #{message.inspect}"
-
                   src = Message.print_address(message.src)
                   # ignore the UAI Plus and ourselves
                   if src != '7F.7F.7F' && !Message.is_group_address?(message.src) && !(motor = @motors[src.gsub('.', '')])
-                    SDN.logger.info "found new motor #{src}"
+                    SDN.logger.info "Found new motor #{src}"
                     @motors_found = true
                     motor = publish_motor(src.gsub('.', ''), message.node_type)
                   end
@@ -142,9 +140,9 @@ module SDN
                   SDN.logger.fatal "EOF reading"
                   exit 2
                 rescue MalformedMessage => e
-                  SDN.logger.warn "ignoring malformed message: #{e}" unless e.to_s =~ /issing data/
+                  SDN.logger.warn "Ignoring malformed message: #{e}" unless e.to_s =~ /issing data/
                 rescue => e
-                  SDN.logger.error "got garbage: #{e}; #{e.backtrace}"
+                  SDN.logger.error "Got garbage: #{e}; #{e.backtrace}"
                 end
               end
             end

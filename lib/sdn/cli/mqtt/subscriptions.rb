@@ -3,7 +3,7 @@ module SDN
     class MQTT
       module Subscriptions
         def handle_message(topic, value)
-          SDN.logger.info "got #{value.inspect} at #{topic}"
+          SDN.logger.info "Got #{value.inspect} at #{topic}"
           if (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/(?<addr>\h{6})/(?<property>discover|label|control|jog-(?<jog_type>pulses|ms)|position-pulses|position-percent|ip|reset|(?<speed_type>up-speed|down-speed|slow-speed)|up-limit|down-limit|direction|ip(?<ip>\d+)-(?<ip_type>pulses|percent)|groups)/set$}))
             addr = Message.parse_address(match[:addr])
             property = match[:property]
