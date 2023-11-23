@@ -7,9 +7,9 @@ module SDN
         def push(obj)
           i = index { |o| o.priority > obj.priority }
           if i
-            super
-          else
             insert(i, obj)
+          else
+            super
           end
         end
       end

@@ -49,7 +49,7 @@ module SDN
                       follow_up = nil
                       if value == "discover"
                         # discovery is low priority, and longer timeout
-                        enqueue(MessageAndRetries.new(Message::GetNodeAddr.new(addr), 1, 4))
+                        enqueue(MessageAndRetries.new(Message::GetNodeAddr.new(addr), 1, 50))
                       end
                       nil
                     when "label"

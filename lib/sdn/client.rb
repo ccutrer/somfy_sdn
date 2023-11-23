@@ -28,7 +28,7 @@ module SDN
               require "ccutrer-serialport"
               CCutrer::SerialPort.new(port, baud: 4800, data_bits: 8, parity: :odd, stop_bits: 1)
             end
-      @buffer = ""
+      @buffer = +""
     end
 
     def trace?
@@ -90,7 +90,7 @@ module SDN
               unless @buffer.empty?
                 SDN.logger.debug "Discarding #{@buffer.unpack1("H*").gsub(/\h{2}/, "\\0 ")} due to timeout"
               end
-              @buffer = ""
+              @buffer = +""
               return messages if timeout
             end
 

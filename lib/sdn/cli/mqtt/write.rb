@@ -70,7 +70,7 @@ module SDN
               elsif message_and_retries
                 @prior_message = nil
               elsif @auto_discover && @motors_found
-                message_and_retries = MessageAndRetries.new(Message::GetNodeAddr.new, 1, 2)
+                message_and_retries = MessageAndRetries.new(Message::GetNodeAddr.new, 1, 50)
                 @motors_found = false
               # nothing pending to write, and motors found on the last iteration;
               # look for more motors

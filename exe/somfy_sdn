@@ -11,8 +11,8 @@ class SomfySDNCLI < Thor
 
   desc "monitor PORT", "Monitor traffic on the SDN network at PORT"
   def monitor(port)
-    options[:verbose] = true
     sdn = handle_global_options(port)
+    SDN.logger.level = :debug
 
     loop do
       sdn.receive do |message|
@@ -25,6 +25,7 @@ class SomfySDNCLI < Thor
   option :"device-id", default: "somfy", desc: "The Homie Device ID"
   option :"base-topic", default: "homie", desc: "The base Homie topic"
   option :"auto-discover", type: :boolean, default: true, desc: "Do a discovery at startup"
+  option :address, type: :array, desc: "Specify a known motor address to speed discovery"
   def mqtt(port, mqtt_uri)
     sdn = handle_global_options(port)
 
@@ -34,7 +35,8 @@ class SomfySDNCLI < Thor
                        mqtt_uri,
                        device_id: options["device-id"],
                        base_topic: options["base-topic"],
-                       auto_discover: options["auto-discover"])
+                       auto_discover: options["auto-discover"],
+                       known_motors: options["address"])
   end
 
   desc "provision PORT [ADDRESS]", "Provision a motor (label and set limits) at PORT"
@@ -47,8 +49,8 @@ class SomfySDNCLI < Thor
 
   desc "simulator PORT [ADDRESS]", "Simulate a motor (for debugging purposes) at PORT"
   def simulator(port, address = nil)
-    options[:verbose] = true
     sdn = handle_global_options(port)
+    SDN.logger.level = :debug
 
     require "sdn/cli/simulator"
     SDN::CLI::Simulator.new(sdn, address)
@@ -58,8 +60,7 @@ class SomfySDNCLI < Thor
 
   def handle_global_options(port)
     SDN.logger = Logger.new(options[:log]) if options[:log]
-    options[:verbose] = true if options[:trace]
-    SDN.logger.level = options[:verbose] ? :debug : :info
+    SDN.logger.level = options[:verbose] || options[:trace] ? :debug : :info
 
     SDN::Client.new(port).tap { |sdn| sdn.trace = options[:trace] }
   end
