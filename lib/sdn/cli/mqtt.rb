@@ -311,8 +311,8 @@ module SDN
           # message priorities are:
           # 0 - control
           # 1 - follow-up (i.e. get position after control)
-          # 2 - get basic motor info
-          # 3 - get advanced motor info
+          # 2 - get motor limits
+          # 3 - get motor info
           # 4 - get group 1
           # 5 - get ip 1
           # 6 - get group 2
@@ -323,20 +323,20 @@ module SDN
           # The Group and IP sorting makes it so you quickly get the most commonly used group
           # and IP addresses, while the almost-never-used ones are pushed to the bottom of the list
 
-          @queue.push(MessageAndRetries.new(Message::GetNodeLabel.new(sdn_addr), 5, 2))
+          @queue.push(MessageAndRetries.new(Message::GetNodeLabel.new(sdn_addr), 5, 3))
 
           case node_type
           when :st30, 0x20 # no idea why 0x20, but that's what I get
-            @queue.push(MessageAndRetries.new(Message::GetMotorStatus.new(sdn_addr), 5, 2))
             @queue.push(MessageAndRetries.new(Message::GetMotorLimits.new(sdn_addr), 5, 2))
+            @queue.push(MessageAndRetries.new(Message::GetMotorStatus.new(sdn_addr), 5, 3))
             @queue.push(MessageAndRetries.new(Message::GetMotorDirection.new(sdn_addr), 5, 3))
             @queue.push(MessageAndRetries.new(Message::GetMotorRollingSpeed.new(sdn_addr), 5, 3))
             (1..16).each do |ip|
               @queue.push(MessageAndRetries.new(Message::GetMotorIP.new(sdn_addr, ip), 5, (2 * ip) + 3))
             end
           when :st50ilt2
-            @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorSettings.new(sdn_addr), 5, 2))
             @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorPosition.new(sdn_addr), 5, 2))
+            @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorSettings.new(sdn_addr), 5, 3))
             (1..16).each do |ip|
               @queue.push(MessageAndRetries.new(Message::ILT2::GetMotorIP.new(sdn_addr, ip), 5, (2 * ip) + 3))
             end
