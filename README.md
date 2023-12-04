@@ -28,11 +28,11 @@ or you can connect to a full bus network, but you'll want to provide the address
 of the motor you want to configure if you do that.
 
 ```sh
-provision_sdn /path/to/serial_port
+somfy_sdn provision /path/to/serial_port
 ```
 
 ```sh
-provision_sdn /path/to/serial_port AB.CD.EF
+somfy_sdn provision /path/to/serial_port AB.CD.EF
 ```
 
 One major caveat is that for ILT2 motors, there's not a way to ask the motor
