@@ -59,7 +59,7 @@ module SDN
                       case value
                       when "up", "down"
                         ((motor&.node_type == :st50ilt2) ? ns::SetMotorPosition : Message::MoveTo)
-                    .new(addr, "#{value}_limit".to_sym)
+                    .new(addr, :"#{value}_limit")
                       when "stop"
                         if motor&.node_type == :st50ilt2
                           ns::SetMotorPosition.new(addr,
@@ -89,7 +89,7 @@ module SDN
                     when /jog-(?:pulses|ms)/
                       value = value.to_i
                       ((motor&.node_type == :st50ilt2) ? ns::SetMotorPosition : Message::MoveOf)
-                    .new(addr, "jog_#{value.negative? ? :up : :down}_#{match[:jog_type]}".to_sym, value.abs)
+                    .new(addr, :"jog_#{value.negative? ? :up : :down}_#{match[:jog_type]}", value.abs)
                     when "reset"
                       return unless Message::SetFactoryDefault::RESET.key?(value.to_sym)
 
