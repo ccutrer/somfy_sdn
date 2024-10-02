@@ -130,11 +130,7 @@ module SDN
             end
             refresh
           when "l"
-            if ilt2?
-              sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @pos, @pos))
-            else
-              sdn.ensure(Message::SetMotorLimits.new(addr, :current_position, :down))
-            end
+            sdn.ensure(Message::ILT2::SetMotorSettings.new(addr, reversed_int, @pos, @pos))
             refresh
           when "r"
             @reversed = !@reversed
