@@ -11,6 +11,7 @@ module SDN
                          :position_percent,
                          :ip,
                          :state,
+                         :hass_state,
                          :last_direction,
                          :last_action_source,
                          :last_action_cause,

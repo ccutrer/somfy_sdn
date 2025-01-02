@@ -21,7 +21,7 @@ Gem::Specification.new do |s|
 
   s.add_dependency "ccutrer-serialport", "~> 1.0"
   s.add_dependency "curses", "~> 1.4"
-  s.add_dependency "mqtt-ccutrer", "~> 1.0"
+  s.add_dependency "mqtt-homeassistant", "~> 1.0"
   s.add_dependency "net-telnet-rfc2217", "~> 1.0"
   s.add_dependency "thor", "~> 1.1"
 

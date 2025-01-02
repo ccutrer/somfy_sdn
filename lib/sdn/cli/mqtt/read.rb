@@ -83,6 +83,16 @@ module SDN
                   follow_ups << Message::GetMotorPosition.new(message.src)
                   motor.publish(:state, message.state)
                   motor.publish(:last_direction, message.last_direction)
+                  hass_state = if message.state == :running
+                                 (message.last_direction == :down) ? :closing : :opening
+                               elsif motor.position_percent&.zero?
+                                 :open
+                               elsif motor.position_percent == 100
+                                 :closed
+                               else
+                                 :stopped
+                               end
+                  motor.publish(:hass_state, hass_state)
                   motor.publish(:last_action_source, message.last_action_source)
                   motor.publish(:last_action_cause, message.last_action_cause)
                   motor.group_objects.each do |group|
