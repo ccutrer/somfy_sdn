@@ -103,6 +103,20 @@ module SDN
                     directions = group.motor_objects.map(&:last_direction).uniq
                     direction = (directions.length == 1) ? directions.first : "mixed"
                     group.publish(:last_direction, direction)
+
+                    positions = group.motor_objects.map(&:position_percent).uniq
+                    position = (positions.length == 1) ? positions.first : 50
+
+                    hass_state = if state == :running
+                                   (direction == :down) ? :closing : :opening
+                                 elsif position.zero?
+                                   :open
+                                 elsif position == 100
+                                   :closed
+                                 else
+                                   :stopped
+                                 end
+                    group.publish(:hass_state, hass_state)
                   end
                 when Message::PostMotorLimits
                   motor.publish(:up_limit, message.up_limit)

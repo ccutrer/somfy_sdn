@@ -3,7 +3,15 @@
 module SDN
   module CLI
     class MQTT
-      Group = Struct.new(:bridge, :addr, :position_percent, :position_pulses, :ip, :last_direction, :state, :motors) do
+      Group = Struct.new(:bridge,
+                         :addr,
+                         :position_percent,
+                         :position_pulses,
+                         :ip,
+                         :last_direction,
+                         :state,
+                         :hass_state,
+                         :motors) do
         def initialize(*)
           members.each { |k| self[k] = :nil }
           super

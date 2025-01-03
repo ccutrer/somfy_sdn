@@ -207,6 +207,7 @@ module SDN
           publish("#{addr}/discover/$format", "discover")
           publish("#{addr}/discover/$settable", "true")
           publish("#{addr}/discover/$retained", "false")
+
           @mqtt.publish_hass_button("discover",
                                     command_topic: "#{@base_topic}/#{addr}/discover/set",
                                     device: hass_device,
@@ -583,6 +584,14 @@ module SDN
         return group if group
 
         @mqtt.batch_publish do
+          hass_device = {
+            identifiers: addr,
+            model: "Shade Group",
+            name: addr,
+            via_device: @device_id
+          }
+          node_id = "#{@device_id}_#{addr}"
+
           publish("#{addr}/$name", addr)
           publish("#{addr}/$type", "Shade Group")
           publish("#{addr}/$properties",
@@ -595,11 +604,52 @@ module SDN
           publish("#{addr}/discover/$settable", "true")
           publish("#{addr}/discover/$retained", "false")
 
+          @mqtt.publish_hass_button("discover",
+                                    command_topic: "#{@base_topic}/#{addr}/discover/set",
+                                    device: hass_device,
+                                    icon: "mdi:search-add",
+                                    name: "Rediscover",
+                                    node_id: node_id,
+                                    object_id: "discover",
+                                    payload_press: "true",
+                                    unique_id: "#{node_id}_discover")
+
           publish("#{addr}/control/$name", "Control motors")
           publish("#{addr}/control/$datatype", "enum")
           publish("#{addr}/control/$format", "up,down,stop,wink,next_ip,previous_ip,refresh")
           publish("#{addr}/control/$settable", "true")
           publish("#{addr}/control/$retained", "false")
+
+          @mqtt.publish_hass_cover("group",
+                                   command_topic: "#{@base_topic}/#{addr}/control/set",
+                                   device: hass_device,
+                                   icon: "mdi:roller-shade",
+                                   name: "Group",
+                                   node_id: node_id,
+                                   payload_close: "down",
+                                   payload_open: "up",
+                                   payload_stop: "stop",
+                                   position_open: 0,
+                                   position_closed: 100,
+                                   position_topic: "#{@base_topic}/#{addr}/position-percent",
+                                   set_position_topic: "#{@base_topic}/#{addr}/position-percent/set",
+                                   state_topic: "#{@base_topic}/#{addr}/hass-state",
+                                   unique_id: "#{node_id}_group")
+          {
+            Wink: "mdi:emoticon-wink",
+            Next_IP: "mdi:skip-next",
+            Previous_IP: "mdi:skip-previous",
+            Refresh: "mdi:refresh"
+          }.each do |command, icon|
+            @mqtt.publish_hass_button(command.to_s.downcase,
+                                      command_topic: "#{@base_topic}/#{addr}/control/set",
+                                      device: hass_device,
+                                      icon: icon,
+                                      name: command.to_s.sub("_", " "),
+                                      node_id: node_id,
+                                      payload_press: command.to_s.downcase,
+                                      unique_id: "#{node_id}_#{command.to_s.downcase}")
+          end
 
           publish("#{addr}/jog-ms/$name", "Jog motors by ms")
           publish("#{addr}/jog-ms/$datatype", "integer")
@@ -621,6 +671,20 @@ module SDN
           publish("#{addr}/position-pulses/$unit", "pulses")
           publish("#{addr}/position-pulses/$settable", "true")
 
+          @mqtt.publish_hass_number("position-pulses",
+                                    command_topic: "#{@base_topic}/#{addr}/position-pulses/set",
+                                    device: hass_device,
+                                    enabled_by_default: false,
+                                    max: 65_536,
+                                    min: 0,
+                                    name: "Position (Pulses)",
+                                    node_id: node_id,
+                                    object_id: "position-pulses",
+                                    state_topic: "#{@base_topic}/#{addr}/position-pulses",
+                                    step: 10,
+                                    unit_of_measurement: "pulses",
+                                    unique_id: "#{node_id}_position-pulses")
+
           publish("#{addr}/position-percent/$name", "Position (in %)")
           publish("#{addr}/position-percent/$datatype", "integer")
           publish("#{addr}/position-percent/$format", "0:100")
@@ -631,6 +695,18 @@ module SDN
           publish("#{addr}/ip/$datatype", "integer")
           publish("#{addr}/ip/$format", "1:16")
           publish("#{addr}/ip/$settable", "true")
+
+          @mqtt.publish_hass_number("ip",
+                                    command_topic: "#{@base_topic}/#{addr}/ip/set",
+                                    device: hass_device,
+                                    name: "Intermediate Position",
+                                    max: 16,
+                                    min: 0,
+                                    node_id: node_id,
+                                    object_id: "ip",
+                                    payload_reset: "",
+                                    state_topic: "#{@base_topic}/#{addr}/ip",
+                                    unique_id: "#{node_id}_ip")
 
           publish("#{addr}/state/$name", "State of the motors")
           publish("#{addr}/state/$datatype", "enum")
