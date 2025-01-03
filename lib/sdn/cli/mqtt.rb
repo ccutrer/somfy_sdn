@@ -11,6 +11,7 @@ require "sdn/cli/mqtt/p_queue"
 require "sdn/cli/mqtt/read"
 require "sdn/cli/mqtt/write"
 require "sdn/cli/mqtt/subscriptions"
+require "sdn/version"
 
 module SDN
   module CLI

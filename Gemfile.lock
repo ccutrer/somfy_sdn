@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    somfy_sdn (2.3.0)
+    somfy_sdn (2.3.1)
       ccutrer-serialport (~> 1.0)
       curses (~> 1.4)
       mqtt-homeassistant (~> 1.0)
