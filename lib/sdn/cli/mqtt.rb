@@ -611,7 +611,7 @@ module SDN
                                     name: "Rediscover",
                                     node_id: node_id,
                                     object_id: "discover",
-                                    payload_press: "true",
+                                    payload_press: "discover",
                                     unique_id: "#{node_id}_discover")
 
           publish("#{addr}/control/$name", "Control motors")
