@@ -19,7 +19,7 @@ module SDN
                 follow_ups = []
                 case message
                 when Message::PostNodeLabel
-                  publish("#{motor.addr}/$name", message.label) if motor.publish(:label, message.label)
+                  publish("#{motor.addr}/$name", message.label) if motor.publish(:label, message.label) && @homie
                 when Message::PostMotorPosition,
                   Message::ILT2::PostMotorPosition
                   if message.is_a?(Message::ILT2::PostMotorPosition)

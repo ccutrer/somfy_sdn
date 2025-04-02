@@ -27,6 +27,8 @@ class SomfySDNCLI < Thor
   option :"base-topic", default: "homie", desc: "The base Homie topic"
   option :"auto-discover", type: :boolean, default: true, desc: "Do a discovery at startup"
   option :address, type: :array, desc: "Specify a known motor address to speed discovery"
+  option :homie, type: :boolean, desc: "Enable Homie discovery", default: true
+  option :"home-assistant", type: :boolean, desc: "Enable Home Assistant discovery", default: true
   def mqtt(port, mqtt_uri)
     sdn = handle_global_options(port)
 
@@ -37,7 +39,9 @@ class SomfySDNCLI < Thor
                        device_id: options["device-id"],
                        base_topic: options["base-topic"],
                        auto_discover: options["auto-discover"],
-                       known_motors: options["address"])
+                       known_motors: options["address"],
+                       homie: options["homie"],
+                       home_assistant: options["home-assistant"])
   end
 
   desc "provision PORT [ADDRESS]", "Provision a motor (label and set limits) at PORT"
