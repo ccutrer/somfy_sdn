@@ -43,6 +43,12 @@ module SDN
         @mqtt.set_will("#{@base_topic}/$state", "lost", retain: true)
         @mqtt.connect
 
+        @availability = [{
+          topic: "#{@base_topic}/$state",
+          payload_available: "ready",
+          payload_not_available: "lost"
+        }.freeze].freeze
+
         @motors = {}
         @groups = {}
 
@@ -130,7 +136,8 @@ module SDN
                                       node_id: @device_id,
                                       object_id: "discover",
                                       unique_id: "#{@device_id}_discover",
-                                      payload_press: "true")
+                                      payload_press: "true",
+                                      availability: @availability)
           end
 
           subscribe_all
@@ -229,7 +236,8 @@ module SDN
                                       node_id: node_id,
                                       object_id: "discover",
                                       payload_press: "true",
-                                      unique_id: "#{node_id}_discover")
+                                      unique_id: "#{node_id}_discover",
+                                      availability: @availability)
           end
 
           if @homie
@@ -247,7 +255,8 @@ module SDN
                                     max: 16,
                                     name: "Label",
                                     node_id: node_id,
-                                    unique_id: "#{node_id}_label")
+                                    unique_id: "#{node_id}_label",
+                                    availability: @availability)
           end
 
           if @homie
@@ -297,7 +306,8 @@ module SDN
                                      position_topic: "#{@base_topic}/#{addr}/position-percent",
                                      set_position_topic: "#{@base_topic}/#{addr}/position-percent/set",
                                      state_topic: "#{@base_topic}/#{addr}/hass-state",
-                                     unique_id: "#{node_id}_motor")
+                                     unique_id: "#{node_id}_motor",
+                                     availability: @availability)
             {
               Wink: "mdi:emoticon-wink",
               Next_IP: "mdi:skip-next",
@@ -311,7 +321,8 @@ module SDN
                                         name: command.to_s.sub("_", " "),
                                         node_id: node_id,
                                         payload_press: command.to_s.downcase,
-                                        unique_id: "#{node_id}_#{command.to_s.downcase}")
+                                        unique_id: "#{node_id}_#{command.to_s.downcase}",
+                                        availability: @availability)
             end
           end
 
@@ -336,7 +347,8 @@ module SDN
                                       state_topic: "#{@base_topic}/#{addr}/position-pulses",
                                       step: 10,
                                       unit_of_measurement: "pulses",
-                                      unique_id: "#{node_id}_position-pulses")
+                                      unique_id: "#{node_id}_position-pulses",
+                                      availability: @availability)
           end
 
           if @homie
@@ -358,7 +370,8 @@ module SDN
                                       object_id: "ip",
                                       payload_reset: "",
                                       state_topic: "#{@base_topic}/#{addr}/ip",
-                                      unique_id: "#{node_id}_ip")
+                                      unique_id: "#{node_id}_ip",
+                                      availability: @availability)
           end
 
           if @homie
@@ -382,7 +395,8 @@ module SDN
                                       state_topic: "#{@base_topic}/#{addr}/down-limit",
                                       step: 10,
                                       unit_of_measurement: "pulses",
-                                      unique_id: "#{node_id}_down-limit")
+                                      unique_id: "#{node_id}_down-limit",
+                                      availability: @availability)
           end
 
           if @homie
@@ -410,7 +424,8 @@ module SDN
                                           name: "Reset #{key.to_s.sub("_", " ")}",
                                           node_id: node_id,
                                           payload_press: key,
-                                          unique_id: "#{node_id}_#{key}")
+                                          unique_id: "#{node_id}_#{key}",
+                                          availability: @availability)
               end
             end
 
@@ -430,7 +445,8 @@ module SDN
                                         object_id: "last-action-source",
                                         options: Message::PostMotorStatus::SOURCE.keys,
                                         state_topic: "#{@base_topic}/#{addr}/last-action-source",
-                                        unique_id: "#{node_id}_last-action-source")
+                                        unique_id: "#{node_id}_last-action-source",
+                                        availability: @availability)
             end
 
             if @homie
@@ -449,7 +465,8 @@ module SDN
                                         object_id: "last-action-cause",
                                         options: Message::PostMotorStatus::CAUSE.keys,
                                         state_topic: "#{@base_topic}/#{addr}/last-action-cause",
-                                        unique_id: "#{node_id}_last-action-cause")
+                                        unique_id: "#{node_id}_last-action-cause",
+                                        availability: @availability)
             end
 
             if @homie
@@ -460,7 +477,7 @@ module SDN
               publish("#{addr}/up-limit/$settable", "true")
             end
 
-            if @homie
+            if @home_assistant
               @mqtt.publish_hass_number("up-limit",
                                         command_topic: "#{@base_topic}/#{addr}/up-limit/set",
                                         device: hass_device,
@@ -474,7 +491,8 @@ module SDN
                                         state_topic: "#{@base_topic}/#{addr}/up-limit",
                                         step: 10,
                                         unit_of_measurement: "pulses",
-                                        unique_id: "#{node_id}_up-limit")
+                                        unique_id: "#{node_id}_up-limit",
+                                        availability: @availability)
             end
 
             if @homie
@@ -484,7 +502,7 @@ module SDN
               publish("#{addr}/direction/$settable", "true")
             end
 
-            if @homie
+            if @home_assistant
               @mqtt.publish_hass_select("direction",
                                         command_topic: "#{@base_topic}/#{addr}/direction/set",
                                         device: hass_device,
@@ -495,7 +513,8 @@ module SDN
                                         object_id: "direction",
                                         options: %w[standard reversed],
                                         state_topic: "#{@base_topic}/#{addr}/direction",
-                                        unique_id: "#{node_id}_direction")
+                                        unique_id: "#{node_id}_direction",
+                                        availability: @availability)
             end
 
             if @homie
@@ -531,7 +550,8 @@ module SDN
                                           node_id: node_id,
                                           state_topic: "#{@base_topic}/#{addr}/#{speed_type.downcase}-speed",
                                           unit_of_measurement: "RPM",
-                                          unique_id: "#{node_id}_#{speed_type.downcase}-speed")
+                                          unique_id: "#{node_id}_#{speed_type.downcase}-speed",
+                                          availability: @availability)
               end
             end
           end
@@ -566,7 +586,8 @@ module SDN
                                         state_topic: "#{@base_topic}/#{addr}/ip#{ip}-pulses",
                                         step: 10,
                                         unit_of_measurement: "pulses",
-                                        unique_id: "#{node_id}_ip#{ip}-pulses")
+                                        unique_id: "#{node_id}_ip#{ip}-pulses",
+                                        availability: @availability)
             end
 
             if @homie
@@ -591,7 +612,8 @@ module SDN
                                       payload_reset: "",
                                       state_topic: "#{@base_topic}/#{addr}/ip#{ip}-percent",
                                       unit_of_measurement: "%",
-                                      unique_id: "#{node_id}_ip#{ip}-percent")
+                                      unique_id: "#{node_id}_ip#{ip}-percent",
+                                      availability: @availability)
           end
 
           motor = Motor.new(self, addr, node_type)
@@ -686,7 +708,8 @@ module SDN
                                       node_id: node_id,
                                       object_id: "discover",
                                       payload_press: "discover",
-                                      unique_id: "#{node_id}_discover")
+                                      unique_id: "#{node_id}_discover",
+                                      availability: @availability)
           end
 
           if @homie
@@ -712,7 +735,8 @@ module SDN
                                      position_topic: "#{@base_topic}/#{addr}/position-percent",
                                      set_position_topic: "#{@base_topic}/#{addr}/position-percent/set",
                                      state_topic: "#{@base_topic}/#{addr}/hass-state",
-                                     unique_id: "#{node_id}_group")
+                                     unique_id: "#{node_id}_group",
+                                     availability: @availability)
             {
               Wink: "mdi:emoticon-wink",
               Next_IP: "mdi:skip-next",
@@ -726,7 +750,8 @@ module SDN
                                         name: command.to_s.sub("_", " "),
                                         node_id: node_id,
                                         payload_press: command.to_s.downcase,
-                                        unique_id: "#{node_id}_#{command.to_s.downcase}")
+                                        unique_id: "#{node_id}_#{command.to_s.downcase}",
+                                        availability: @availability)
             end
           end
 
@@ -765,7 +790,8 @@ module SDN
                                       state_topic: "#{@base_topic}/#{addr}/position-pulses",
                                       step: 10,
                                       unit_of_measurement: "pulses",
-                                      unique_id: "#{node_id}_position-pulses")
+                                      unique_id: "#{node_id}_position-pulses",
+                                      availability: @availability)
           end
 
           if @homie
@@ -792,7 +818,8 @@ module SDN
                                       object_id: "ip",
                                       payload_reset: "",
                                       state_topic: "#{@base_topic}/#{addr}/ip",
-                                      unique_id: "#{node_id}_ip")
+                                      unique_id: "#{node_id}_ip",
+                                      availability: @availability)
           end
 
           if @homie
