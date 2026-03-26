@@ -30,6 +30,7 @@ RSpec.describe SDN::CLI::MQTT do
     bridge.instance_variable_set(:@pending_group_motors, [])
 
     allow(mutex).to receive(:synchronize).and_yield
+    allow(bridge).to receive(:publish)
   end
 
   describe "#handle_message" do
@@ -159,6 +160,74 @@ RSpec.describe SDN::CLI::MQTT do
       expect(sdn).to have_received(:send).with(message).twice
       expect(queue).to be_empty
       expect(bridge.instance_variable_get(:@prior_message).remaining_retries).to eq(0)
+    end
+
+    it "marks a running motor stopped after the final GetMotorStatus timeout" do
+      motor.state = :running
+      message = SDN::Message::GetMotorStatus.new(motor_bytes)
+
+      bridge.send(:handle_get_motor_status_timeout, message)
+
+      expect(motor.state).to eq(:stopped)
+      expect(motor.last_action_source).to eq(:bridge)
+      expect(motor.last_action_cause).to eq(:timeout)
+      expect(bridge).to have_received(:publish).with("#{motor_addr}/state", "stopped")
+      expect(bridge).to have_received(:publish).with("#{motor_addr}/last-action-source", "bridge")
+      expect(bridge).to have_received(:publish).with("#{motor_addr}/last-action-cause", "timeout")
+    end
+
+    it "leaves non-running motors unchanged after a GetMotorStatus timeout" do
+      motor.state = :stopped
+      message = SDN::Message::GetMotorStatus.new(motor_bytes)
+
+      bridge.send(:handle_get_motor_status_timeout, message)
+
+      expect(motor.state).to eq(:stopped)
+      expect(motor.last_action_source).to be_nil
+      expect(motor.last_action_cause).to be_nil
+      expect(bridge).not_to have_received(:publish).with("#{motor_addr}/state", anything)
+    end
+
+    it "clears position state after a GetMotorPosition timeout" do
+      motor.position_pulses = 1234
+      motor.position_percent = 56
+      motor.ip = 4
+      message = SDN::Message::GetMotorPosition.new(motor_bytes)
+
+      bridge.send(:handle_get_motor_position_timeout, message)
+
+      expect(motor.position_pulses).to be_nil
+      expect(motor.position_percent).to be_nil
+      expect(motor.ip).to be_nil
+      expect(bridge).to have_received(:publish).with("#{motor_addr}/position-pulses", "")
+      expect(bridge).to have_received(:publish).with("#{motor_addr}/position-percent", "")
+      expect(bridge).to have_received(:publish).with("#{motor_addr}/ip", "")
+    end
+
+    it "clears position state after an ILT2 GetMotorPosition timeout" do
+      motor.position_pulses = 222
+      motor.position_percent = 33
+      motor.ip = 2
+      message = SDN::Message::ILT2::GetMotorPosition.new(motor_bytes)
+
+      bridge.send(:handle_get_motor_position_timeout, message)
+
+      expect(motor.position_pulses).to be_nil
+      expect(motor.position_percent).to be_nil
+      expect(motor.ip).to be_nil
+    end
+
+    it "does not republish already-cleared position state after a GetMotorPosition timeout" do
+      motor.position_pulses = nil
+      motor.position_percent = nil
+      motor.ip = nil
+      message = SDN::Message::GetMotorPosition.new(motor_bytes)
+
+      bridge.send(:handle_get_motor_position_timeout, message)
+
+      expect(bridge).not_to have_received(:publish).with("#{motor_addr}/position-pulses", anything)
+      expect(bridge).not_to have_received(:publish).with("#{motor_addr}/position-percent", anything)
+      expect(bridge).not_to have_received(:publish).with("#{motor_addr}/ip", anything)
     end
   end
 end

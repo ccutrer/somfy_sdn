@@ -39,6 +39,8 @@ module SDN
                         @queue.push(@prior_message)
                       end
                       @prior_message = nil
+                    elsif @prior_message
+                      handle_timeout_fallback(@prior_message.message)
                     end
                   else
                     @cond.wait(@mutex, remaining_wait)
@@ -95,6 +97,37 @@ module SDN
         rescue => e
           SDN.logger.fatal "Failure writing: #{e}: #{e.backtrace}"
           exit 1
+        end
+
+        private
+
+        def handle_timeout_fallback(message)
+          case message
+          when Message::GetMotorStatus
+            handle_get_motor_status_timeout(message)
+          when Message::GetMotorPosition, Message::ILT2::GetMotorPosition
+            handle_get_motor_position_timeout(message)
+          end
+        end
+
+        def handle_get_motor_status_timeout(message)
+          addr = Message.print_address(message.dest).delete(".")
+          motor = @motors[addr]
+          return unless motor&.state == :running
+
+          motor.publish(:state, :stopped)
+          motor.publish(:last_action_source, :bridge)
+          motor.publish(:last_action_cause, :timeout)
+        end
+
+        def handle_get_motor_position_timeout(message)
+          addr = Message.print_address(message.dest).delete(".")
+          motor = @motors[addr]
+          return unless motor
+
+          motor.publish(:position_pulses, nil)
+          motor.publish(:position_percent, nil)
+          motor.publish(:ip, nil)
         end
       end
     end

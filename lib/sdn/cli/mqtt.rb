@@ -98,11 +98,196 @@ module SDN
         @mqtt.get { |packet| handle_message(packet.topic, packet.payload) }
       end
 
-      private
-
       def publish(topic, value)
         @mqtt.publish("#{@base_topic}/#{topic}", value, retain: true, qos: 1)
       end
+
+      # Refreshes a group's published motor membership when one of its members changes.
+      #
+      # @param group_addr [(Integer, Integer, Integer))] group address bytes
+      #
+      # @return [void]
+      def touch_group(group_addr)
+        group = @groups[Message.print_address(group_addr).delete(".")]
+        group&.publish(:motors, group.motors_string)
+      end
+
+      # Publishes MQTT metadata for a group, creating it if necessary.
+      #
+      # @param addr [String] printable group address
+      #
+      # @return [SDN::CLI::MQTT::Group]
+      def add_group(addr)
+        addr = addr.delete(".")
+        group = @groups[addr]
+        return group if group
+
+        @mqtt.batch_publish do
+          hass_device = {
+            identifiers: addr,
+            model: "Shade Group",
+            name: addr,
+            via_device: @device_id
+          }
+          node_id = "#{@device_id}_#{addr}"
+
+          if @homie
+            publish("#{addr}/$name", addr)
+            publish("#{addr}/$type", "Shade Group")
+            publish("#{addr}/$properties",
+                    "discover,control,jog-ms,jog-pulses,position-pulses,position-percent," \
+                    "ip,reset,state,last-direction,motors")
+
+            publish("#{addr}/discover/$name", "Trigger Motor Discovery")
+            publish("#{addr}/discover/$datatype", "enum")
+            publish("#{addr}/discover/$format", "discover")
+            publish("#{addr}/discover/$settable", "true")
+            publish("#{addr}/discover/$retained", "false")
+          end
+
+          if @home_assistant
+            @mqtt.publish_hass_button("discover",
+                                      command_topic: "#{@base_topic}/#{addr}/discover/set",
+                                      device: hass_device,
+                                      icon: "mdi:search-add",
+                                      name: "Rediscover",
+                                      node_id:,
+                                      object_id: "discover",
+                                      payload_press: "discover",
+                                      unique_id: "#{node_id}_discover",
+                                      availability: @availability)
+          end
+
+          if @homie
+            publish("#{addr}/control/$name", "Control motors")
+            publish("#{addr}/control/$datatype", "enum")
+            publish("#{addr}/control/$format", "up,down,stop,wink,next_ip,previous_ip,refresh")
+            publish("#{addr}/control/$settable", "true")
+            publish("#{addr}/control/$retained", "false")
+          end
+
+          if @home_assistant
+            @mqtt.publish_hass_cover("group",
+                                     command_topic: "#{@base_topic}/#{addr}/control/set",
+                                     device: hass_device,
+                                     icon: "mdi:roller-shade",
+                                     name: "Group",
+                                     node_id:,
+                                     payload_close: "down",
+                                     payload_open: "up",
+                                     payload_stop: "stop",
+                                     position_open: 0,
+                                     position_closed: 100,
+                                     position_topic: "#{@base_topic}/#{addr}/position-percent",
+                                     set_position_topic: "#{@base_topic}/#{addr}/position-percent/set",
+                                     state_topic: "#{@base_topic}/#{addr}/hass-state",
+                                     unique_id: "#{node_id}_group",
+                                     availability: @availability)
+            {
+              Wink: "mdi:emoticon-wink",
+              Next_IP: "mdi:skip-next",
+              Previous_IP: "mdi:skip-previous",
+              Refresh: "mdi:refresh"
+            }.each do |command, icon|
+              @mqtt.publish_hass_button(command.to_s.downcase,
+                                        command_topic: "#{@base_topic}/#{addr}/control/set",
+                                        device: hass_device,
+                                        icon:,
+                                        name: command.to_s.sub("_", " "),
+                                        node_id:,
+                                        payload_press: command.to_s.downcase,
+                                        unique_id: "#{node_id}_#{command.to_s.downcase}",
+                                        availability: @availability)
+            end
+          end
+
+          if @homie
+            publish("#{addr}/jog-ms/$name", "Jog motors by ms")
+            publish("#{addr}/jog-ms/$datatype", "integer")
+            publish("#{addr}/jog-ms/$format", "-65535:65535")
+            publish("#{addr}/jog-ms/$unit", "ms")
+            publish("#{addr}/jog-ms/$settable", "true")
+            publish("#{addr}/jog-ms/$retained", "false")
+
+            publish("#{addr}/jog-pulses/$name", "Jog motors by pulses")
+            publish("#{addr}/jog-pulses/$datatype", "integer")
+            publish("#{addr}/jog-pulses/$format", "-65535:65535")
+            publish("#{addr}/jog-pulses/$unit", "pulses")
+            publish("#{addr}/jog-pulses/$settable", "true")
+            publish("#{addr}/jog-pulses/$retained", "false")
+
+            publish("#{addr}/position-pulses/$name", "Position from up limit (in pulses)")
+            publish("#{addr}/position-pulses/$datatype", "integer")
+            publish("#{addr}/position-pulses/$format", "0:65535")
+            publish("#{addr}/position-pulses/$unit", "pulses")
+            publish("#{addr}/position-pulses/$settable", "true")
+          end
+
+          if @home_assistant
+            @mqtt.publish_hass_number("position-pulses",
+                                      command_topic: "#{@base_topic}/#{addr}/position-pulses/set",
+                                      device: hass_device,
+                                      enabled_by_default: false,
+                                      max: 65_536,
+                                      min: 0,
+                                      name: "Position (Pulses)",
+                                      node_id:,
+                                      object_id: "position-pulses",
+                                      state_topic: "#{@base_topic}/#{addr}/position-pulses",
+                                      step: 10,
+                                      unit_of_measurement: "pulses",
+                                      unique_id: "#{node_id}_position-pulses",
+                                      availability: @availability)
+          end
+
+          if @homie
+            publish("#{addr}/position-percent/$name", "Position (in %)")
+            publish("#{addr}/position-percent/$datatype", "integer")
+            publish("#{addr}/position-percent/$format", "0:100")
+            publish("#{addr}/position-percent/$unit", "%")
+            publish("#{addr}/position-percent/$settable", "true")
+
+            publish("#{addr}/ip/$name", "Intermediate Position")
+            publish("#{addr}/ip/$datatype", "integer")
+            publish("#{addr}/ip/$format", "1:16")
+            publish("#{addr}/ip/$settable", "true")
+          end
+
+          if @home_assistant
+            @mqtt.publish_hass_number("ip",
+                                      command_topic: "#{@base_topic}/#{addr}/ip/set",
+                                      device: hass_device,
+                                      name: "Intermediate Position",
+                                      max: 16,
+                                      min: 0,
+                                      node_id:,
+                                      object_id: "ip",
+                                      payload_reset: "",
+                                      state_topic: "#{@base_topic}/#{addr}/ip",
+                                      unique_id: "#{node_id}_ip",
+                                      availability: @availability)
+          end
+
+          if @homie
+            publish("#{addr}/state/$name", "State of the motors")
+            publish("#{addr}/state/$datatype", "enum")
+            publish("#{addr}/state/$format", "#{Message::PostMotorStatus::STATE.keys.join(",")},mixed")
+
+            publish("#{addr}/last-direction/$name", "Direction of last motion")
+            publish("#{addr}/last-direction/$datatype", "enum")
+            publish("#{addr}/last-direction/$format", "#{Message::PostMotorStatus::DIRECTION.keys.join(",")},mixed")
+
+            publish("#{addr}/motors/$name", "Comma separated motor addresses that are members of this group")
+            publish("#{addr}/motors/$datatype", "string")
+          end
+
+          group = @groups[addr] = Group.new(self, addr)
+          publish("$nodes", (["FFFFFF"] + @motors.keys.sort + @groups.keys.sort).join(",")) if @homie
+        end
+        group
+      end
+
+      private
 
       def subscribe(topic)
         @mqtt.subscribe("#{@base_topic}/#{topic}")
@@ -698,191 +883,6 @@ module SDN
         end
 
         motor
-      end
-
-      # Refreshes a group's published motor membership when one of its members changes.
-      #
-      # @param group_addr [(Integer, Integer, Integer))] group address bytes
-      #
-      # @return [void]
-      def touch_group(group_addr)
-        group = @groups[Message.print_address(group_addr).delete(".")]
-        group&.publish(:motors, group.motors_string)
-      end
-
-      # Publishes MQTT metadata for a group, creating it if necessary.
-      #
-      # @param addr [String] printable group address
-      #
-      # @return [SDN::CLI::MQTT::Group]
-      def add_group(addr)
-        addr = addr.delete(".")
-        group = @groups[addr]
-        return group if group
-
-        @mqtt.batch_publish do
-          hass_device = {
-            identifiers: addr,
-            model: "Shade Group",
-            name: addr,
-            via_device: @device_id
-          }
-          node_id = "#{@device_id}_#{addr}"
-
-          if @homie
-            publish("#{addr}/$name", addr)
-            publish("#{addr}/$type", "Shade Group")
-            publish("#{addr}/$properties",
-                    "discover,control,jog-ms,jog-pulses,position-pulses,position-percent," \
-                    "ip,reset,state,last-direction,motors")
-
-            publish("#{addr}/discover/$name", "Trigger Motor Discovery")
-            publish("#{addr}/discover/$datatype", "enum")
-            publish("#{addr}/discover/$format", "discover")
-            publish("#{addr}/discover/$settable", "true")
-            publish("#{addr}/discover/$retained", "false")
-          end
-
-          if @home_assistant
-            @mqtt.publish_hass_button("discover",
-                                      command_topic: "#{@base_topic}/#{addr}/discover/set",
-                                      device: hass_device,
-                                      icon: "mdi:search-add",
-                                      name: "Rediscover",
-                                      node_id:,
-                                      object_id: "discover",
-                                      payload_press: "discover",
-                                      unique_id: "#{node_id}_discover",
-                                      availability: @availability)
-          end
-
-          if @homie
-            publish("#{addr}/control/$name", "Control motors")
-            publish("#{addr}/control/$datatype", "enum")
-            publish("#{addr}/control/$format", "up,down,stop,wink,next_ip,previous_ip,refresh")
-            publish("#{addr}/control/$settable", "true")
-            publish("#{addr}/control/$retained", "false")
-          end
-
-          if @home_assistant
-            @mqtt.publish_hass_cover("group",
-                                     command_topic: "#{@base_topic}/#{addr}/control/set",
-                                     device: hass_device,
-                                     icon: "mdi:roller-shade",
-                                     name: "Group",
-                                     node_id:,
-                                     payload_close: "down",
-                                     payload_open: "up",
-                                     payload_stop: "stop",
-                                     position_open: 0,
-                                     position_closed: 100,
-                                     position_topic: "#{@base_topic}/#{addr}/position-percent",
-                                     set_position_topic: "#{@base_topic}/#{addr}/position-percent/set",
-                                     state_topic: "#{@base_topic}/#{addr}/hass-state",
-                                     unique_id: "#{node_id}_group",
-                                     availability: @availability)
-            {
-              Wink: "mdi:emoticon-wink",
-              Next_IP: "mdi:skip-next",
-              Previous_IP: "mdi:skip-previous",
-              Refresh: "mdi:refresh"
-            }.each do |command, icon|
-              @mqtt.publish_hass_button(command.to_s.downcase,
-                                        command_topic: "#{@base_topic}/#{addr}/control/set",
-                                        device: hass_device,
-                                        icon:,
-                                        name: command.to_s.sub("_", " "),
-                                        node_id:,
-                                        payload_press: command.to_s.downcase,
-                                        unique_id: "#{node_id}_#{command.to_s.downcase}",
-                                        availability: @availability)
-            end
-          end
-
-          if @homie
-            publish("#{addr}/jog-ms/$name", "Jog motors by ms")
-            publish("#{addr}/jog-ms/$datatype", "integer")
-            publish("#{addr}/jog-ms/$format", "-65535:65535")
-            publish("#{addr}/jog-ms/$unit", "ms")
-            publish("#{addr}/jog-ms/$settable", "true")
-            publish("#{addr}/jog-ms/$retained", "false")
-
-            publish("#{addr}/jog-pulses/$name", "Jog motors by pulses")
-            publish("#{addr}/jog-pulses/$datatype", "integer")
-            publish("#{addr}/jog-pulses/$format", "-65535:65535")
-            publish("#{addr}/jog-pulses/$unit", "pulses")
-            publish("#{addr}/jog-pulses/$settable", "true")
-            publish("#{addr}/jog-pulses/$retained", "false")
-
-            publish("#{addr}/position-pulses/$name", "Position from up limit (in pulses)")
-            publish("#{addr}/position-pulses/$datatype", "integer")
-            publish("#{addr}/position-pulses/$format", "0:65535")
-            publish("#{addr}/position-pulses/$unit", "pulses")
-            publish("#{addr}/position-pulses/$settable", "true")
-          end
-
-          if @home_assistant
-            @mqtt.publish_hass_number("position-pulses",
-                                      command_topic: "#{@base_topic}/#{addr}/position-pulses/set",
-                                      device: hass_device,
-                                      enabled_by_default: false,
-                                      max: 65_536,
-                                      min: 0,
-                                      name: "Position (Pulses)",
-                                      node_id:,
-                                      object_id: "position-pulses",
-                                      state_topic: "#{@base_topic}/#{addr}/position-pulses",
-                                      step: 10,
-                                      unit_of_measurement: "pulses",
-                                      unique_id: "#{node_id}_position-pulses",
-                                      availability: @availability)
-          end
-
-          if @homie
-            publish("#{addr}/position-percent/$name", "Position (in %)")
-            publish("#{addr}/position-percent/$datatype", "integer")
-            publish("#{addr}/position-percent/$format", "0:100")
-            publish("#{addr}/position-percent/$unit", "%")
-            publish("#{addr}/position-percent/$settable", "true")
-
-            publish("#{addr}/ip/$name", "Intermediate Position")
-            publish("#{addr}/ip/$datatype", "integer")
-            publish("#{addr}/ip/$format", "1:16")
-            publish("#{addr}/ip/$settable", "true")
-          end
-
-          if @home_assistant
-            @mqtt.publish_hass_number("ip",
-                                      command_topic: "#{@base_topic}/#{addr}/ip/set",
-                                      device: hass_device,
-                                      name: "Intermediate Position",
-                                      max: 16,
-                                      min: 0,
-                                      node_id:,
-                                      object_id: "ip",
-                                      payload_reset: "",
-                                      state_topic: "#{@base_topic}/#{addr}/ip",
-                                      unique_id: "#{node_id}_ip",
-                                      availability: @availability)
-          end
-
-          if @homie
-            publish("#{addr}/state/$name", "State of the motors")
-            publish("#{addr}/state/$datatype", "enum")
-            publish("#{addr}/state/$format", "#{Message::PostMotorStatus::STATE.keys.join(",")},mixed")
-
-            publish("#{addr}/last-direction/$name", "Direction of last motion")
-            publish("#{addr}/last-direction/$datatype", "enum")
-            publish("#{addr}/last-direction/$format", "#{Message::PostMotorStatus::DIRECTION.keys.join(",")},mixed")
-
-            publish("#{addr}/motors/$name", "Comma separated motor addresses that are members of this group")
-            publish("#{addr}/motors/$datatype", "string")
-          end
-
-          group = @groups[addr] = Group.new(self, addr)
-          publish("$nodes", (["FFFFFF"] + @motors.keys.sort + @groups.keys.sort).join(",")) if @homie
-        end
-        group
       end
     end
   end
