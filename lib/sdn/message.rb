@@ -267,6 +267,11 @@ module SDN
         error_code = to_number(params[0])
         self.error_code = VALUES.invert[error_code] || error_code
       end
+
+      # (see Message#params)
+      def params
+        transform_param(VALUES[error_code] || error_code)
+      end
     end
 
     # Fallback wrapper for frames whose opcode is unknown to the library.

@@ -189,7 +189,7 @@ module SDN
 
       # (see Message#params)
       def params
-        from_number(position_pulses, 2) + from_number(position_percent) + from_number(ip)
+        from_number(position_pulses, 2) + from_number(position_percent) + from_number(0) + from_number(ip)
       end
     end
 
