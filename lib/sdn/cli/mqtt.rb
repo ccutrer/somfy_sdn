@@ -651,7 +651,8 @@ module SDN
             if @homie
               publish("#{addr}/last-action-source/$name", "Source of last action")
               publish("#{addr}/last-action-source/$datatype", "enum")
-              publish("#{addr}/last-action-source/$format", Message::PostMotorStatus::SOURCE.keys.join(","))
+              publish("#{addr}/last-action-source/$format",
+                      (Message::PostMotorStatus::SOURCE.keys + [:bridge]).join(","))
             end
 
             if @home_assistant
@@ -671,7 +672,8 @@ module SDN
             if @homie
               publish("#{addr}/last-action-cause/$name", "Cause of last action")
               publish("#{addr}/last-action-cause/$datatype", "enum")
-              publish("#{addr}/last-action-cause/$format", Message::PostMotorStatus::CAUSE.keys.join(","))
+              publish("#{addr}/last-action-cause/$format",
+                      (Message::PostMotorStatus::CAUSE.keys + [:timeout]).join(","))
             end
 
             if @home_assistant
