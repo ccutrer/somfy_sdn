@@ -128,7 +128,7 @@ module SDN
             model: "Shade Group",
             name: addr,
             via_device: @device_id
-          }
+          }.freeze
           node_id = "#{@device_id}_#{addr}"
 
           if @homie
@@ -352,7 +352,7 @@ module SDN
               name: "Somfy SDN Bridge",
               identifiers: @device_id,
               sw_version: SDN::VERSION
-            }
+            }.freeze
             @mqtt.publish_hass_button("discover",
                                       command_topic: "#{@base_topic}/FFFFFF/discover/set",
                                       device: hass_device,
@@ -415,7 +415,7 @@ module SDN
             model_id: node_type,
             name: addr,
             via_device: @device_id
-          }
+          }.freeze
           node_id = "#{@device_id}_#{addr}"
 
           if @homie

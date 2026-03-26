@@ -39,7 +39,7 @@ GEM
     logger (1.7.0)
     mqtt-ccutrer (1.1.0)
       logger (~> 1.7)
-    mqtt-homeassistant (1.2.0)
+    mqtt-homeassistant (1.2.1)
       json (~> 2.0)
       mqtt-ccutrer (~> 1.0, >= 1.0.3)
     net-telnet (0.2.0)
