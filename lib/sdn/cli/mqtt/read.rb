@@ -87,16 +87,9 @@ module SDN
                   follow_ups << Message::GetMotorPosition.new(message.src)
                   motor.publish(:state, message.state)
                   motor.publish(:last_direction, message.last_direction)
-                  hass_state = if message.state == :running
-                                 (message.last_direction == :down) ? :closing : :opening
-                               elsif motor.position_percent&.zero?
-                                 :open
-                               elsif motor.position_percent == 100
-                                 :closed
-                               else
-                                 :stopped
-                               end
-                  motor.publish(:hass_state, hass_state)
+                  motor.publish(:hass_state, motor_hass_state(message.state,
+                                                              message.last_direction,
+                                                              motor.position_percent))
                   motor.publish(:last_action_source, message.last_action_source)
                   motor.publish(:last_action_cause, message.last_action_cause)
                   motor.group_objects.each do |group|
@@ -111,16 +104,7 @@ module SDN
                     positions = group.motor_objects.map(&:position_percent).uniq
                     position = (positions.length == 1) ? positions.first : 50
 
-                    hass_state = if state == :running
-                                   (direction == :down) ? :closing : :opening
-                                 elsif position.zero?
-                                   :open
-                                 elsif position == 100
-                                   :closed
-                                 else
-                                   :stopped
-                                 end
-                    group.publish(:hass_state, hass_state)
+                    group.publish(:hass_state, motor_hass_state(state, direction, position))
                   end
                 when Message::PostMotorLimits
                   motor.publish(:up_limit, message.up_limit)

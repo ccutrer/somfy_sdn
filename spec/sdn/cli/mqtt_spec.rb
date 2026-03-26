@@ -164,14 +164,17 @@ RSpec.describe SDN::CLI::MQTT do
 
     it "marks a running motor stopped after the final GetMotorStatus timeout" do
       motor.state = :running
+      motor.position_percent = 55
       message = SDN::Message::GetMotorStatus.new(motor_bytes)
 
       bridge.send(:handle_get_motor_status_timeout, message)
 
       expect(motor.state).to eq(:stopped)
+      expect(motor.hass_state).to eq(:stopped)
       expect(motor.last_action_source).to eq(:bridge)
       expect(motor.last_action_cause).to eq(:timeout)
       expect(bridge).to have_received(:publish).with("#{motor_addr}/state", "stopped")
+      expect(bridge).to have_received(:publish).with("#{motor_addr}/hass-state", "stopped")
       expect(bridge).to have_received(:publish).with("#{motor_addr}/last-action-source", "bridge")
       expect(bridge).to have_received(:publish).with("#{motor_addr}/last-action-cause", "timeout")
     end
@@ -186,6 +189,17 @@ RSpec.describe SDN::CLI::MQTT do
       expect(motor.last_action_source).to be_nil
       expect(motor.last_action_cause).to be_nil
       expect(bridge).not_to have_received(:publish).with("#{motor_addr}/state", anything)
+    end
+
+    it "marks hass-state open when a running motor times out at 0 percent" do
+      motor.state = :running
+      motor.position_percent = 0
+      message = SDN::Message::GetMotorStatus.new(motor_bytes)
+
+      bridge.send(:handle_get_motor_status_timeout, message)
+
+      expect(motor.hass_state).to eq(:open)
+      expect(bridge).to have_received(:publish).with("#{motor_addr}/hass-state", "open")
     end
 
     it "clears position state after a GetMotorPosition timeout" do

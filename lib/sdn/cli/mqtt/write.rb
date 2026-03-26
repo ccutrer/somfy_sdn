@@ -116,6 +116,7 @@ module SDN
           return unless motor&.state == :running
 
           motor.publish(:state, :stopped)
+          motor.publish(:hass_state, motor_hass_state(:stopped, motor.last_direction, motor.position_percent))
           motor.publish(:last_action_source, :bridge)
           motor.publish(:last_action_cause, :timeout)
         end

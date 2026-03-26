@@ -289,6 +289,18 @@ module SDN
 
       private
 
+      def motor_hass_state(state, direction, position_percent)
+        if state == :running
+          (direction == :down) ? :closing : :opening
+        elsif position_percent&.zero?
+          :open
+        elsif position_percent == 100
+          :closed
+        else
+          :stopped
+        end
+      end
+
       def subscribe(topic)
         @mqtt.subscribe("#{@base_topic}/#{topic}")
       end
