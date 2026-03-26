@@ -3,10 +3,13 @@
 require "sdn/message/helpers"
 
 module SDN
+  # Raised when a parsed frame is structurally valid but its payload does not match the target message type.
   class MalformedMessage < RuntimeError; end
 
+  # Base type for all SDN protocol frames and message-specific serializers/parsers.
   class Message
     class << self
+      # @!visibility private
       def inherited(klass)
         super
         return Message.inherited(klass) unless self == Message
@@ -15,6 +18,11 @@ module SDN
         (@subclasses ||= []) << klass
       end
 
+      # Determines whether a received message satisfies the expected response for this request type.
+      #
+      # @param message [SDN::Message] received message candidate
+      #
+      # @return [true, false]
       def expected_response?(message)
         if /::Get([A-Za-z]+)/.match?(name)
           message.class.name == name.sub("::Get", "::Post") # rubocop:disable Style/ClassEqualityComparison
@@ -23,6 +31,11 @@ module SDN
         end
       end
 
+      # Attempts to parse the first valid SDN message from a byte stream.
+      #
+      # @param data [<Integer>] raw bytes buffered from the transport
+      #
+      # @return [(SDN::Message, Integer)] parsed message and consumed byte count
       def parse(data)
         offset = -1
         msg = length = ack_requested = message_class = nil
@@ -70,6 +83,9 @@ module SDN
 
       private
 
+      # Builds a lookup table from protocol opcode to message class.
+      #
+      # @return [{Integer => Class}]
       def message_map
         @message_map ||=
           @subclasses.each_with_object({}) do |klass, memo|
@@ -83,8 +99,32 @@ module SDN
     include Helpers
     singleton_class.include Helpers
 
-    attr_accessor :node_type, :ack_requested, :src, :dest
+    # Message sender node type.
+    #
+    # @return [Symbol, Integer]
+    attr_accessor :node_type
 
+    # Whether this message requests an acknowledgement.
+    #
+    # @return [true, false]
+    attr_accessor :ack_requested
+
+    # Source address for the message.
+    #
+    # @return [(Integer, Integer, Integer)]
+    attr_accessor :src
+
+    # Destination address for the message.
+    #
+    # @return [(Integer, Integer, Integer)]
+    attr_accessor :dest
+
+    # Builds a message envelope with optional addressing and acknowledgement behavior.
+    #
+    # @param node_type [Symbol, Integer, nil] originating node type
+    # @param ack_requested [true, false] whether the receiver should acknowledge the message
+    # @param src [(Integer, Integer, Integer), nil] source address bytes
+    # @param dest [(Integer, Integer, Integer), nil] destination address bytes
     def initialize(node_type: nil, ack_requested: false, src: nil, dest: nil)
       @node_type = node_type || 0
       @ack_requested = ack_requested
@@ -96,6 +136,13 @@ module SDN
       @dest = dest || [0, 0, 0]
     end
 
+    # Parses protocol-specific parameter bytes into this message instance.
+    #
+    # @param params [<Integer>] raw parameter bytes
+    #
+    # @return [void]
+    #
+    # @raise [SDN::MalformedMessage] when the parameter payload length is invalid
     def parse(params)
       return unless self.class.const_defined?(:PARAMS_LENGTH) && params.length != self.class.const_get(:PARAMS_LENGTH)
 
@@ -104,6 +151,9 @@ module SDN
                                                                              end}"
     end
 
+    # Serializes the message to a packed SDN frame.
+    #
+    # @return [String] binary protocol frame
     def serialize
       result = transform_param(node_type_to_number(node_type)) + transform_param(src) + transform_param(dest) + params
       length = result.length + 4
@@ -113,10 +163,12 @@ module SDN
       result.pack("C*")
     end
 
+    # @return [true, false]
     def ==(other)
       serialize == other.serialize
     end
 
+    # @return [String]
     def inspect
       format("#<%s @node_type=%s, @ack_requested=%s, @src=%s, @dest=%s%s>",
              self.class.name,
@@ -128,6 +180,11 @@ module SDN
     end
     alias_method :to_s, :inspect
 
+    private
+
+    # Returns the protocol-specific portion of the inspection string.
+    #
+    # @return [String, nil]
     def class_inspect
       ivars = instance_variables - %i[@node_type @ack_requested @src @dest @params]
       return if ivars.empty?
@@ -137,22 +194,43 @@ module SDN
 
     protected
 
+    # Returns the protocol-specific payload bytes for this message.
+    #
+    # @return [<Integer>]
     def params
       []
     end
 
+    # Base class for request messages with no protocol-specific parameters.
     class SimpleRequest < Message
+      # Number of protocol parameter bytes expected
       PARAMS_LENGTH = 0
 
+      # Creates a simple request whose only payload is the destination address.
+      #
+      # @param dest [(Integer, Integer, Integer), nil] destination address
+      # @param kwargs [Hash] additional message options
       def initialize(dest = nil, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
       end
     end
 
+    # Positive acknowledgement response for commands that requested one.
+    class Ack < SimpleRequest
+      # Protocol message number
+      MSG = 0x7f
+      # (see SimpleRequest::PARAMS_LENGTH)
+      PARAMS_LENGTH = 0
+    end
+
+    # Negative acknowledgement response emitted when a request cannot be fulfilled.
     class Nack < Message
+      # (see Ack::MSG)
       MSG = 0x6f
+      # (see Ack::PARAMS_LENGTH)
       PARAMS_LENGTH = 1
+      # Mapping from symbolic error names to SDN error codes.
       VALUES = { data_error: 0x01,
                  unknown_message: 0x10,
                  node_is_locked: 0x20,
@@ -165,15 +243,25 @@ module SDN
       # 37 not implemented? (get motor rolling speed)
       # 39 at limit? blocked?
 
-      # presumed
+      # Parsed NACK error code as a symbolic name or raw integer.
+      #
+      # @return [Symbol, Integer, nil]
       attr_accessor :error_code
 
+      # Creates a negative acknowledgement message.
+      #
+      # @param dest [(Integer, Integer, Integer), nil] destination address
+      # @param error_code [Symbol, Integer, nil] protocol error code
+      # @param kwargs [Hash] additional message options
       def initialize(dest = nil, error_code = nil, **kwargs)
         kwargs[:dest] ||= dest
         super(**kwargs)
         self.error_code = error_code
       end
 
+      # Parses the negative acknowledgement error code.
+      #
+      # @param params [<Integer>] raw parameter bytes
       def parse(params)
         super
         error_code = to_number(params[0])
@@ -181,15 +269,23 @@ module SDN
       end
     end
 
-    class Ack < SimpleRequest
-      MSG = 0x7f
-      PARAMS_LENGTH = 0
-    end
-
-    # messages after this point were decoded from UAI+ communication and may be named wrong
+    # Fallback wrapper for frames whose opcode is unknown to the library.
+    #
+    # Messages after this point were decoded from UAI+ communication and may be named wrong.
     class UnknownMessage < Message
-      attr_accessor :msg, :params
+      # Unknown protocol opcode captured for this message.
+      #
+      # @return [Integer, nil]
+      attr_accessor :msg
 
+      # Raw undecoded parameter bytes for this message.
+      #
+      # @return [<Integer>, nil]
+      attr_accessor :params
+
+      # Creates a message wrapper for an unrecognized protocol opcode.
+      #
+      # @param params [<Integer>] raw unparsed parameter bytes
       def initialize(params = [], **)
         super(**)
         self.params = params
@@ -197,6 +293,11 @@ module SDN
 
       alias_method :parse, :params=
 
+      # Serializes an unknown message only when raw parameters are present.
+      #
+      # @return [String] binary protocol frame
+      #
+      # @raise [NotImplementedError] when parameters are unavailable
       def serialize
         # prevent serializing something we don't know
         raise NotImplementedError unless params
@@ -204,6 +305,7 @@ module SDN
         super
       end
 
+      # (see Message#class_inspect)
       def class_inspect
         result = if instance_of?(UnknownMessage)
                    format(", @msg=%02xh", msg)

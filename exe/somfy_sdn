@@ -5,6 +5,7 @@ require "somfy_sdn"
 require "thor"
 require "uri"
 
+# @!visibility private
 class SomfySDNCLI < Thor
   class_option :verbose, type: :boolean, default: false, desc: "Log protocol messages"
   class_option :trace, type: :boolean, default: false, desc: "Log protocol bytes"

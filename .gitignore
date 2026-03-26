@@ -1,2 +1,4 @@
-/somfy_sdn-*.gem
+/.yardoc/
+/doc/
 /pkg/
+/somfy_sdn-*.gem

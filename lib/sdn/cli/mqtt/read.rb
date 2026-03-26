@@ -3,7 +3,11 @@
 module SDN
   module CLI
     class MQTT
+      # Reader loop that translates SDN responses into MQTT state updates.
       module Read
+        # Continuously consumes SDN messages and republishes state to MQTT.
+        #
+        # @return [void]
         def read
           loop do
             @sdn.receive do |message|

@@ -3,7 +3,14 @@
 module SDN
   module CLI
     class MQTT
+      # MQTT subscription handlers that translate inbound command messages into SDN commands.
       module Subscriptions
+        # Converts an MQTT command message into one or more queued SDN messages.
+        #
+        # @param topic [String] absolute MQTT topic
+        # @param value [String] MQTT payload
+        #
+        # @return [void]
         def handle_message(topic, value)
           SDN.logger.info "Got #{value.inspect} at #{topic}"
           unless (match = topic.match(%r{^#{Regexp.escape(@base_topic)}/

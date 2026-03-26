@@ -3,10 +3,17 @@
 module SDN
   class Message
     module ILT2
+      # Special five-byte ILT2 master-control frame parser.
       class MasterControl
         class << self
           include Helpers
 
+          # Parses a five-byte ILT2 master control frame when present.
+          #
+          # @param data [<Integer>] buffered input bytes
+          #
+          # @return [(SDN::Message::ILT2::MasterControl, Integer), nil]
+          # (see Message#parse)
           def parse(data)
             return unless data.length >= 5
             return unless checksum(data[0..2]) == data[3..4]
@@ -24,12 +31,15 @@ module SDN
           end
         end
 
+        # Master-control frame representing a down command.
         class Down < MasterControl
         end
 
+        # Master-control frame representing a stop command.
         class Stop < MasterControl
         end
 
+        # Master-control frame representing an up command.
         class Up < MasterControl
         end
       end

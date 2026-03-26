@@ -14,18 +14,40 @@ require "sdn/version"
 
 module SDN
   module CLI
+    # @!visibility private
     class MQTT
+      # Queue entry wrapper containing an SDN message, retry budget, and scheduling priority.
       MessageAndRetries = Struct.new(:message, :remaining_retries, :priority)
 
       include Read
       include Write
       include Subscriptions
 
+      # Time to wait, in seconds, for a direct response before retrying.
       WAIT_TIME = 0.25
+      # Time to wait, in seconds, for broadcast or group discovery responses.
       BROADCAST_WAIT = 5.0
 
-      attr_reader :motors, :groups
+      # Discovered motors keyed by normalized address.
+      #
+      # @return [{String => SDN::CLI::MQTT::Motor}]
+      attr_reader :motors
 
+      # Discovered groups keyed by normalized address.
+      #
+      # @return [{String => SDN::CLI::MQTT::Group}]
+      attr_reader :groups
+
+      # Creates the MQTT bridge, publishes discovery metadata, and starts read/write loops.
+      #
+      # @param sdn [SDN::Client]
+      # @param mqtt_uri [String]
+      # @param device_id [String] Homie bridge device identifier
+      # @param base_topic [String] Homie base MQTT topic
+      # @param auto_discover [true, false] whether to periodically discover motors
+      # @param known_motors [<String>] motor addresses to seed discovery
+      # @param homie [true, false] whether to publish Homie metadata
+      # @param home_assistant [true, false] whether to publish Home Assistant discovery data
       def initialize(sdn,
                      mqtt_uri,
                      device_id: "somfy",
@@ -76,6 +98,8 @@ module SDN
         @mqtt.get { |packet| handle_message(packet.topic, packet.payload) }
       end
 
+      private
+
       def publish(topic, value)
         @mqtt.publish("#{@base_topic}/#{topic}", value, retain: true, qos: 1)
       end
@@ -84,6 +108,11 @@ module SDN
         @mqtt.subscribe("#{@base_topic}/#{topic}")
       end
 
+      # Adds a message to the prioritized write queue if it is not already present.
+      #
+      # @param message [Message]
+      #
+      # @return [void]
       def enqueue(message)
         @mutex.synchronize do
           break if @queue.include?(message)
@@ -174,6 +203,12 @@ module SDN
         end
       end
 
+      # Publishes MQTT metadata for a motor and schedules follow-up SDN discovery queries.
+      #
+      # @param addr [String] printable motor address without separators
+      # @param node_type [Symbol, Integer] detected motor node type
+      #
+      # @return [SDN::CLI::MQTT::Motor]
       def publish_motor(addr, node_type)
         motor = nil
 
@@ -665,11 +700,21 @@ module SDN
         motor
       end
 
+      # Refreshes a group's published motor membership when one of its members changes.
+      #
+      # @param group_addr [(Integer, Integer, Integer))] group address bytes
+      #
+      # @return [void]
       def touch_group(group_addr)
         group = @groups[Message.print_address(group_addr).delete(".")]
         group&.publish(:motors, group.motors_string)
       end
 
+      # Publishes MQTT metadata for a group, creating it if necessary.
+      #
+      # @param addr [String] printable group address
+      #
+      # @return [SDN::CLI::MQTT::Group]
       def add_group(addr)
         addr = addr.delete(".")
         group = @groups[addr]

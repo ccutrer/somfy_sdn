@@ -3,7 +3,11 @@
 module SDN
   module CLI
     class MQTT
+      # Writer loop that drains the outbound queue and manages retries and follow-up timing.
       module Write
+        # Continuously drains the prioritized queue and transmits SDN messages.
+        #
+        # @return [void]
         def write
           last_write_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 

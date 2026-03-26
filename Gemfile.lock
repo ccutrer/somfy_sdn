@@ -21,6 +21,11 @@ GEM
       reline (>= 0.3.8)
     erb (6.0.2)
     ffi (1.17.4)
+    ffi (1.17.4-aarch64-linux-gnu)
+    ffi (1.17.4-arm-linux-gnu)
+    ffi (1.17.4-arm64-darwin)
+    ffi (1.17.4-x86_64-darwin)
+    ffi (1.17.4-x86_64-linux-gnu)
     io-console (0.8.2)
     irb (1.17.0)
       pp (>= 0.6.0)
@@ -39,6 +44,7 @@ GEM
     net-telnet (0.2.0)
     net-telnet-rfc2217 (1.0.2)
       net-telnet (~> 0.2.0)
+    nio4r (2.7.5)
     parallel (1.27.0)
     parser (3.3.11.0)
       ast (~> 2.4.1)
@@ -50,7 +56,12 @@ GEM
     psych (5.3.1)
       date
       stringio
+    puma (7.2.0)
+      nio4r (~> 2.0)
     racc (1.8.1)
+    rack (3.2.5)
+    rackup (2.3.1)
+      rack (>= 3)
     rainbow (3.1.1)
     rake (13.3.1)
     rdoc (7.2.0)
@@ -91,16 +102,29 @@ GEM
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.2.0)
+    yard (0.9.38)
+    yard-lint (1.4.0)
+      yard (~> 0.9)
+      zeitwerk (~> 2.6)
+    zeitwerk (2.7.5)
 
 PLATFORMS
+  aarch64-linux
+  arm-linux
+  arm64-darwin
   ruby
+  x86_64-darwin
+  x86_64-linux
 
 DEPENDENCIES
   debug (~> 1.9)
+  puma (~> 7.2)
+  rackup (~> 2.3)
   rake (~> 13.0)
   rubocop-inst (~> 1.0)
   rubocop-rake (~> 0.6)
   somfy_sdn!
+  yard-lint (~> 1.4)
 
 BUNDLED WITH
-   4.0.9
+  4.0.9

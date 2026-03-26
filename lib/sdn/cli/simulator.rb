@@ -2,26 +2,63 @@
 
 module SDN
   module CLI
+    # @!visibility private
     class Simulator
+      # Simulated motor implementation that responds to a subset of SDN requests.
       class MockMotor
-        attr_accessor :address,
-                      :node_type,
-                      :label,
-                      :ips,
-                      :position_pulses,
-                      :up_limit,
-                      :down_limit,
-                      :groups,
-                      :network_lock_priority,
-                      :lock_priority,
-                      :ir_channels
+        # Simulated motor address.
+        #
+        # @return [(Integer, Integer, Integer)]
+        attr_accessor :address
 
+        # @return [:st30, :lt50]
+        attr_accessor :node_type
+
+        # @return [String]
+        attr_accessor :label
+
+        # Stored intermediate positions keyed by slot index.
+        #
+        # @return [<Integer, nil>]
+        attr_accessor :ips
+
+        # Current motor position in pulses from the upper limit.
+        #
+        # @return [Integer, nil]
+        attr_accessor :position_pulses
+
+        # @return [Integer, nil]
+        attr_accessor :up_limit
+
+        # @return [Integer, nil]
+        attr_accessor :down_limit
+
+        # Stored group memberships keyed by slot index.
+        #
+        # @return [<(Integer, Integer, Integer), nil>]
+        attr_accessor :groups
+
+        # @return [Integer, nil]
+        attr_accessor :network_lock_priority
+
+        # @return [Integer, nil]
+        attr_accessor :lock_priority
+
+        # Simulated ILT2 IR channel bitmask.
+        #
+        # @return [Integer]
+        attr_accessor :ir_channels
+
+        # Absolute move target types supported by the simulator implementation.
         ALLOWED_MOVE_TYPES = %i[up_limit
                                 down_limit
                                 ip
                                 position_pulses
                                 position_percent].freeze
 
+        # Creates a simulated motor backed by an SDN client.
+        #
+        # @param client [SDN::Client] SDN client used to receive and send messages
         def initialize(client)
           @client = client
           self.address = Message.parse_address("00.00.00")
@@ -33,6 +70,11 @@ module SDN
           self.lock_priority = 0
         end
 
+        private
+
+        # Starts processing incoming SDN messages for the simulated motor.
+        #
+        # @return [void]
         def process
           loop do
             @client.receive do |message|
@@ -191,20 +233,41 @@ module SDN
           end
         end
 
+        # Converts a pulse position to a percentage using the configured down limit.
+        #
+        # @param pulses [Integer, nil] position in pulses
+        #
+        # @return [Numeric, nil]
         def to_percent(pulses)
           (pulses && down_limit) ? 100.0 * pulses / down_limit : nil
         end
 
+        # Converts a percentage to a pulse position using the configured down limit.
+        #
+        # @param percent [Numeric, nil] position in percent
+        #
+        # @return [Numeric, nil]
         def to_pulses(percent)
           (percent && down_limit) ? down_limit * percent / 100 : nil
         end
 
+        # Sends an acknowledgement for the supplied message when one was requested.
+        #
+        # @param message [SDN::Message] request message
+        #
+        # @return [void]
         def ack(message)
           return unless message.ack_requested
 
           respond(Message::Ack.new(message.dest))
         end
 
+        # Sends a negative acknowledgement for the supplied message when one was requested.
+        #
+        # @param message [SDN::Message] request message
+        # @param _error_code [nil] reserved error code argument
+        #
+        # @return [void]
         def nack(message, _error_code = nil)
           return unless message.ack_requested
 
@@ -219,6 +282,10 @@ module SDN
         end
       end
 
+      # Starts a simulator instance for a single mock motor.
+      #
+      # @param sdn [SDN::Client] SDN client connection
+      # @param address [String, nil] optional simulated motor address
       def initialize(sdn, address = nil)
         motor = MockMotor.new(sdn)
         motor.address = Message.parse_address(address) if address

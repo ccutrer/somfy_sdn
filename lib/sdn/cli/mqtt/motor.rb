@@ -3,6 +3,7 @@
 module SDN
   module CLI
     class MQTT
+      # In-memory state container for a discovered motor and its published MQTT attributes.
       Motor = Struct.new(:bridge,
                          :addr,
                          :node_type,
@@ -62,6 +63,7 @@ module SDN
           super
         end
 
+        # @!visibility private
         def publish(attribute, value)
           return unless self[attribute] != value
 
@@ -69,6 +71,12 @@ module SDN
           self[attribute] = value
         end
 
+        # Updates a group slot and refreshes derived group membership state.
+        #
+        # @param index [Integer] group slot number
+        # @param address [(Integer, Integer, Integer), nil] group address
+        #
+        # @return [void]
         def add_group(index, address)
           group = bridge.add_group(Message.print_address(address)) if address
           old_group = @groups[index - 1]
@@ -78,6 +86,11 @@ module SDN
           bridge.touch_group(old_group) if old_group
         end
 
+        # Builds the SDN writes needed to reconcile group membership with a comma-separated list.
+        #
+        # @param groups [String] comma-separated group addresses
+        #
+        # @return [<SDN::Message>]
         def set_groups(groups) # rubocop:disable Naming/AccessorMethodName
           return unless /^(?:\h{2}[:.]?\h{2}[:.]?\h{2}(?:,\h{2}[:.]?\h{2}[:.]?\h{2})*)?$/i.match?(groups)
 
@@ -96,10 +109,18 @@ module SDN
           messages
         end
 
+        # @!attribute [r] groups_string
+        #
+        # Returns the current group membership list as a normalized string.
+        #
+        # @return [String]
         def groups_string
           @groups.compact.map { |g| Message.print_address(g) }.sort.uniq.join(",")
         end
 
+        # @!attribute [r] group_objects
+        #
+        # @return [<SDN::CLI::MQTT::Group>]
         def group_objects
           groups_string.split(",").map { |addr| bridge.groups[addr.delete(".")] }
         end

@@ -4,9 +4,28 @@ require "curses"
 
 module SDN
   module CLI
+    # @!visibility private
     class Provisioner
-      attr_reader :win, :sdn, :addr, :ns
+      # @return [Curses::Window]
+      attr_reader :win
 
+      # @return [SDN::Client]
+      attr_reader :sdn
+
+      # Selected motor address as a three-byte array.
+      #
+      # @return [(Integer, Integer, Integer)]
+      attr_reader :addr
+
+      # Message namespace used for the current motor type (regular or ILT2).
+      #
+      # @return [Module]
+      attr_reader :ns
+
+      # Builds the interactive provisioning UI for a discovered motor.
+      #
+      # @param sdn [SDN::Client] SDN client connection
+      # @param addr [String, nil] optional motor address
       def initialize(sdn, addr = nil)
         @sdn = sdn
         @reversed = false
@@ -71,6 +90,11 @@ module SDN
         end
       end
 
+      private
+
+      # Runs the key-driven event loop.
+      #
+      # @return [void]
       def process
         win.keypad = true
         print_help
@@ -188,6 +212,9 @@ module SDN
         win.refresh
       end
 
+      # Polls the motor until movement stops, allowing escape to interrupt.
+      #
+      # @return [void]
       def wait_for_stop
         win.setpos(13, 0)
         win.addstr("Moving...\n")
@@ -224,6 +251,9 @@ module SDN
         end
       end
 
+      # Refreshes the displayed motor position, limits, and direction state.
+      #
+      # @return [void]
       def refresh
         pos = sdn.ensure(ns::GetMotorPosition.new(addr))
         @pos = pos.position_pulses
@@ -256,6 +286,9 @@ module SDN
         ns == Message::ILT2
       end
 
+      # Returns the reverse-direction flag as an integer for ILT2 settings writes.
+      #
+      # @return [Integer]
       def reversed_int
         @reversed ? 1 : 0
       end

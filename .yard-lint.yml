@@ -1,0 +1,16 @@
+AllValidators:
+  FailOnSeverity: convention
+  MinCoverage: 100.0
+
+Documentation/MissingReturn:
+  Enabled: true
+Documentation/UndocumentedOptions:
+  Enabled: false
+
+Tags/CollectionType:
+  EnforcedStyle: short
+Tags/TagGroupSeparator:
+  Enabled: true
+  RequireAfterDescription: true
+Tags/OptionTags:
+  Enabled: false
