@@ -11,7 +11,7 @@ module SDN
       @io = if uri.scheme == "tcp"
               require "socket"
               TCPSocket.new(uri.host, uri.port)
-            elsif uri.scheme == "telnet" || uri.scheme == "rfc2217"
+            elsif %w[telnet rfc2217].include?(uri.scheme)
               require "net/telnet/rfc2217"
               Net::Telnet::RFC2217.new(host: uri.host,
                                        port: uri.port || 23,

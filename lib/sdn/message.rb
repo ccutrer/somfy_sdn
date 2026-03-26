@@ -73,7 +73,7 @@ module SDN
       def message_map
         @message_map ||=
           @subclasses.each_with_object({}) do |klass, memo|
-            next memo unless klass.constants(false).include?(:MSG)
+            next memo unless klass.const_defined?(:MSG, false)
 
             memo[klass.const_get(:MSG, false)] = klass
           end

@@ -18,7 +18,7 @@ module SDN
         super
         self.group_index = to_number(params[0]) + 1
         self.group_address = transform_param(params[1..3])
-        self.group_address = nil if group_address == [0, 0, 0] || group_address == [0x01, 0x01, 0xff]
+        self.group_address = nil if [[0, 0, 0], [0x01, 0x01, 0xff]].include?(group_address)
       end
 
       def params
