@@ -9,8 +9,8 @@ module SDN
 
         attr_reader :channels
 
-        def initialize(channels = nil, **kwargs)
-          super(**kwargs)
+        def initialize(channels = nil, **)
+          super(**)
           self.channels = channels
         end
 
@@ -38,8 +38,8 @@ module SDN
 
         attr_accessor :priority # 0 for not locked
 
-        def initialize(priority = nil, **kwargs)
-          super(**kwargs)
+        def initialize(priority = nil, **)
+          super(**)
           self.priority = priority
         end
 
@@ -59,8 +59,8 @@ module SDN
 
         attr_accessor :ip, :position_pulses
 
-        def initialize(ip = nil, position_pulses = nil, **kwargs)
-          super(**kwargs)
+        def initialize(ip = nil, position_pulses = nil, **)
+          super(**)
           self.ip = ip
           self.position_pulses = position_pulses
         end
@@ -82,8 +82,8 @@ module SDN
 
         attr_accessor :position_pulses, :position_percent
 
-        def initialize(position_pulses = nil, position_percent = nil, **kwargs)
-          super(**kwargs)
+        def initialize(position_pulses = nil, position_percent = nil, **)
+          super(**)
           self.position_pulses = position_pulses
           self.position_percent = position_percent
         end
@@ -106,8 +106,8 @@ module SDN
 
         attr_accessor :limit
 
-        def initialize(limit = nil, **kwargs)
-          super(**kwargs)
+        def initialize(limit = nil, **)
+          super(**)
           self.limit = limit
         end
 

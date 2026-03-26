@@ -17,13 +17,11 @@ Gem::Specification.new do |s|
   s.executables = ["somfy_sdn"]
   s.files = Dir["{exe,lib}/**/*"]
 
-  s.required_ruby_version = ">= 2.5"
+  s.required_ruby_version = ">= 3.2"
 
   s.add_dependency "ccutrer-serialport", "~> 1.0"
   s.add_dependency "curses", "~> 1.4"
   s.add_dependency "mqtt-homeassistant", "~> 1.0"
   s.add_dependency "net-telnet-rfc2217", "~> 1.0"
   s.add_dependency "thor", "~> 1.1"
-
-  s.add_development_dependency "rake", "~> 13.0"
 end

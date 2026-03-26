@@ -64,7 +64,7 @@ module SDN
       loop do
         message, bytes_read = Message.parse(@buffer.bytes)
         # discard how much we read
-        @buffer = @buffer[bytes_read..-1] if bytes_read
+        @buffer = @buffer[bytes_read..] if bytes_read
         unless message
           break unless messages.empty?
 

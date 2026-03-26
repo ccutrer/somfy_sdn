@@ -58,7 +58,7 @@ module SDN
         src = transform_param(data.slice(offset + 3, 3))
         dest = transform_param(data.slice(offset + 6, 3))
         begin
-          result = message_class.new(node_type: node_type, ack_requested: ack_requested, src: src, dest: dest)
+          result = message_class.new(node_type:, ack_requested:, src:, dest:)
           result.parse(data.slice(offset + 9, length - 11))
           result.msg = msg if message_class == UnknownMessage
         rescue ArgumentError => e
@@ -190,8 +190,8 @@ module SDN
     class UnknownMessage < Message
       attr_accessor :msg, :params
 
-      def initialize(params = [], **kwargs)
-        super(**kwargs)
+      def initialize(params = [], **)
+        super(**)
         self.params = params
       end
 

@@ -6,8 +6,8 @@ module SDN
       MSG = 0x61
       PARAMS_LENGTH = 4
 
-      def initialize(group_index = nil, group_address = nil, **kwargs)
-        super(**kwargs)
+      def initialize(group_index = nil, group_address = nil, **)
+        super(**)
         self.group_index = group_index
         self.group_address = group_address
       end
@@ -49,8 +49,8 @@ module SDN
 
       attr_accessor :ip, :position_pulses, :position_percent
 
-      def initialize(ip = nil, position_pulses = nil, position_percent = nil, **kwargs)
-        super(**kwargs)
+      def initialize(ip = nil, position_pulses = nil, position_percent = nil, **)
+        super(**)
         self.ip = ip
         self.position_pulses = position_pulses
         self.position_percent = position_percent
@@ -74,8 +74,8 @@ module SDN
 
       attr_accessor :up_limit, :down_limit
 
-      def initialize(up_limit = nil, down_limit = nil, **kwargs)
-        super(**kwargs)
+      def initialize(up_limit = nil, down_limit = nil, **)
+        super(**)
         self.up_limit = up_limit
         self.down_limit = down_limit
       end
@@ -97,8 +97,8 @@ module SDN
 
       attr_accessor :position_pulses, :position_percent, :ip
 
-      def initialize(position_pulses = nil, position_percent = nil, ip = nil, **kwargs)
-        super(**kwargs)
+      def initialize(position_pulses = nil, position_percent = nil, ip = nil, **)
+        super(**)
         self.position_pulses = position_pulses
         self.position_percent = position_percent
         self.ip = ip
@@ -190,8 +190,8 @@ module SDN
 
       attr_accessor :label
 
-      def initialize(label = nil, **kwargs)
-        super(**kwargs)
+      def initialize(label = nil, **)
+        super(**)
         self.label = label
       end
 
