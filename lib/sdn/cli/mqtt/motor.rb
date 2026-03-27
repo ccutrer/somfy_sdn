@@ -56,11 +56,14 @@ module SDN
                          :ip16_percent,
                          :groups,
                          :last_action,
-                         :last_position_pulses) do
+                         :last_position_pulses,
+                         :last_action_retries) do
         def initialize(*)
           members.each { |k| self[k] = :nil }
           @groups = [].fill(nil, 0, 16)
           super
+          self.last_action = Message::Stop
+          self.last_action_retries = 0
         end
 
         # @!visibility private

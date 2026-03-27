@@ -188,6 +188,7 @@ module SDN
                        Message::Wink,
                        Message::Stop].include?(message.class)
             motor.last_action = message.class
+            motor.last_action_retries = 3
           end
 
           return unless message

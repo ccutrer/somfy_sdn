@@ -15,36 +15,38 @@ module SDN
             message_and_retries = nil
             @mutex.synchronize do
               # got woken up early by another command getting queued; spin
-              if @response_pending
-                while @response_pending
-                  remaining_wait = @response_pending - Time.now.to_f
-                  if remaining_wait.negative?
-                    SDN.logger.debug "Timed out waiting on response"
-                    @response_pending = nil
-                    @broadcast_pending = nil
-                    if @prior_message && @prior_message&.remaining_retries != 0
-                      SDN.logger.debug "Retrying #{@prior_message.remaining_retries} more times ..."
-                      if Message.group_address?(@prior_message.message.src) && !@pending_group_motors.empty?
-                        SDN.logger.debug "Re-targetting group message to individual motors"
-                        @pending_group_motors.each do |addr|
-                          new_message = @prior_message.message.dup
-                          new_message.src = [0, 0, 1]
-                          new_message.dest = Message.parse_address(addr)
-                          @queue.push(MessageAndRetries.new(new_message,
-                                                            @prior_message.remaining_retries,
-                                                            @prior_message.priority))
-                        end
-                        @pending_group_motors = []
-                      else
-                        @queue.push(@prior_message)
-                      end
-                      @prior_message = nil
-                    elsif @prior_message
-                      handle_timeout_fallback(@prior_message.message)
-                    end
+              while @response_pending
+                remaining_wait = @response_pending - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                if remaining_wait.negative?
+                  if @prior_message
+                    SDN.logger.info "Timed out waiting on response to #{@prior_message.message.inspect}; " \
+                                    "retries left: #{@prior_message.remaining_retries}"
                   else
-                    @cond.wait(@mutex, remaining_wait)
+                    SDN.logger.info "Timed out waiting on response"
                   end
+                  @response_pending = nil
+                  @broadcast_pending = nil
+                  if @prior_message
+                    if @prior_message.remaining_retries.zero?
+                      handle_timeout_fallback(@prior_message.message)
+                    elsif Message.group_address?(@prior_message.message.src) && !@pending_group_motors.empty?
+                      SDN.logger.debug "Re-targetting group message to individual motors"
+                      @pending_group_motors.each do |addr|
+                        new_message = @prior_message.message.dup
+                        new_message.src = [0, 0, 1]
+                        new_message.dest = Message.parse_address(addr)
+                        @queue.push(MessageAndRetries.new(new_message,
+                                                          @prior_message.remaining_retries,
+                                                          @prior_message.priority))
+                      end
+                      @pending_group_motors = []
+                    else
+                      @queue.push(@prior_message)
+                    end
+                    @prior_message = nil
+                  end
+                else
+                  @cond.wait(@mutex, remaining_wait)
                 end
               end
 
@@ -52,7 +54,7 @@ module SDN
               if message_and_retries && (
                 message_and_retries.message.ack_requested ||
                 message_and_retries.message.class.name =~ /^SDN::Message::Get/)
-                @response_pending = Time.now.to_f + WAIT_TIME
+                @response_pending = Process.clock_gettime(Process::CLOCK_MONOTONIC) + WAIT_TIME
                 @pending_group_motors = if Message.group_address?(message_and_retries.message.src)
                                           group_addr = Message.print_address(message_and_retries.message.src).delete(
                                             "."
@@ -65,7 +67,7 @@ module SDN
                 if message_and_retries.message.dest == BROADCAST_ADDRESS || (
                   Message.group_address?(message_and_retries.message.src) &&
                   message_and_retries.message.is_a?(Message::GetNodeAddr))
-                  @broadcast_pending = Time.now.to_f + BROADCAST_WAIT
+                  @broadcast_pending = Process.clock_gettime(Process::CLOCK_MONOTONIC) + BROADCAST_WAIT
                 end
               end
 

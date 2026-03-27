@@ -142,11 +142,7 @@ RSpec.describe SDN::CLI::MQTT do
       message = SDN::Message::SetNodeLabel.new(motor_bytes, "Retry me", ack_requested: true)
       queue.push(described_class::MessageAndRetries.new(message, 2, 0))
 
-      first_now = instance_double(Time, to_f: 100.0)
-      timed_out_now = instance_double(Time, to_f: 101.0)
-      retry_now = instance_double(Time, to_f: 101.1)
-      allow(Time).to receive(:now).and_return(first_now, timed_out_now, retry_now)
-      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(0.0, 0.2, 0.4)
+      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(0.0, 0.0, 1.0, 1.1, 0.2, 0.4)
       allow(bridge).to receive(:sleep)
 
       sends = 0
@@ -160,6 +156,42 @@ RSpec.describe SDN::CLI::MQTT do
       expect(sdn).to have_received(:send).with(message).twice
       expect(queue).to be_empty
       expect(bridge.instance_variable_get(:@prior_message).remaining_retries).to eq(0)
+    end
+
+    it "re-sends a timed out group command directly to motors that missed it" do
+      group_bytes = SDN::Message.parse_address(group_addr)
+      missed_addrs = %w[010203 0A0B0C]
+      group_message = SDN::Message::SetNodeLabel.new(group_bytes, "Group retry", ack_requested: true)
+
+      bridge.instance_variable_set(:@response_pending, 0.25)
+      bridge.instance_variable_set(:@prior_message, described_class::MessageAndRetries.new(group_message, 2, 7))
+      bridge.instance_variable_set(:@pending_group_motors, missed_addrs.dup)
+
+      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(0.0, 1.0, 1.1, 0.2)
+      allow(bridge).to receive(:sleep)
+
+      sent = nil
+      allow(sdn).to receive(:send) do |message|
+        sent = message
+        raise SystemExit
+      end
+
+      expect { bridge.write }.to raise_error(SystemExit)
+
+      expect(sent).to eq(SDN::Message::SetNodeLabel.new(SDN::Message.parse_address(missed_addrs.first),
+                                                        "Group retry",
+                                                        ack_requested: true))
+      expect(sent.src).to eq([0, 0, 1])
+
+      expect(queue.length).to eq(1)
+      queued_retry = queue.first
+      expect(queued_retry.message).to eq(SDN::Message::SetNodeLabel.new(SDN::Message.parse_address(missed_addrs.last),
+                                                                        "Group retry",
+                                                                        ack_requested: true))
+      expect(queued_retry.message.src).to eq([0, 0, 1])
+      expect(queued_retry.remaining_retries).to eq(2)
+      expect(queued_retry.priority).to eq(7)
+      expect(bridge.instance_variable_get(:@pending_group_motors)).to eq([])
     end
 
     it "marks a running motor stopped after the final GetMotorStatus timeout" do
@@ -242,6 +274,37 @@ RSpec.describe SDN::CLI::MQTT do
       expect(bridge).not_to have_received(:publish).with("#{motor_addr}/position-pulses", anything)
       expect(bridge).not_to have_received(:publish).with("#{motor_addr}/position-percent", anything)
       expect(bridge).not_to have_received(:publish).with("#{motor_addr}/ip", anything)
+    end
+  end
+
+  describe "#read" do
+    it "stops re-querying motor status after bounded retries when an UP command is already at the up limit" do
+      motor.state = :running
+      motor.position_percent = 0
+      motor.last_action = SDN::Message::MoveTo
+      motor.last_action_retries = 3
+      message = SDN::Message::PostMotorStatus.new(node_type: :st50ac, src: motor_bytes).tap do |status|
+        status.state = :stopped
+        status.last_direction = :up
+        status.last_action_source = :network
+        status.last_action_cause = :explicit_command
+      end
+
+      four_follow_ups = Array.new(4) do
+        follow_ups = []
+        bridge.send(:handle_post_motor_status, message, motor, follow_ups)
+        follow_ups
+      end
+
+      expect(four_follow_ups.first).to eq([SDN::Message::GetMotorStatus.new(motor_bytes),
+                                           SDN::Message::GetMotorPosition.new(motor_bytes)])
+      expect(four_follow_ups[1]).to eq([SDN::Message::GetMotorStatus.new(motor_bytes),
+                                        SDN::Message::GetMotorPosition.new(motor_bytes)])
+      expect(four_follow_ups[2]).to eq([SDN::Message::GetMotorStatus.new(motor_bytes),
+                                        SDN::Message::GetMotorPosition.new(motor_bytes)])
+      expect(four_follow_ups[3]).to eq([SDN::Message::GetMotorPosition.new(motor_bytes)])
+      expect(motor.last_action_retries).to eq(0)
+      expect(motor.hass_state).to eq(:open)
     end
   end
 end

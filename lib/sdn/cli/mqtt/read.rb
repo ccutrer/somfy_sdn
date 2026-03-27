@@ -75,37 +75,7 @@ module SDN
                     group.publish(:ip, ip)
                   end
                 when Message::PostMotorStatus
-                  if message.state == :running || motor.state == :running ||
-                     # if it's explicitly stopped, but we didn't ask it to, it's probably
-                     # changing directions so keep querying
-                     (message.state == :stopped &&
-                       message.last_action_cause == :explicit_command &&
-                       !(motor.last_action == Message::Stop || motor.last_action.nil?))
-                    follow_ups << Message::GetMotorStatus.new(message.src)
-                  end
-                  # this will do one more position request after it stopped
-                  follow_ups << Message::GetMotorPosition.new(message.src)
-                  motor.publish(:state, message.state)
-                  motor.publish(:last_direction, message.last_direction)
-                  motor.publish(:hass_state, motor_hass_state(message.state,
-                                                              message.last_direction,
-                                                              motor.position_percent))
-                  motor.publish(:last_action_source, message.last_action_source)
-                  motor.publish(:last_action_cause, message.last_action_cause)
-                  motor.group_objects.each do |group|
-                    states = group.motor_objects.map(&:state).uniq
-                    state = (states.length == 1) ? states.first : "mixed"
-                    group.publish(:state, state)
-
-                    directions = group.motor_objects.map(&:last_direction).uniq
-                    direction = (directions.length == 1) ? directions.first : "mixed"
-                    group.publish(:last_direction, direction)
-
-                    positions = group.motor_objects.map(&:position_percent).uniq
-                    position = (positions.length == 1) ? positions.first : 50
-
-                    group.publish(:hass_state, motor_hass_state(state, direction, position))
-                  end
+                  handle_post_motor_status(message, motor, follow_ups)
                 when Message::PostMotorLimits
                   motor.publish(:up_limit, message.up_limit)
                   motor.publish(:down_limit, message.down_limit)
@@ -159,6 +129,47 @@ module SDN
                 SDN.logger.error "Got garbage: #{e}; #{e.backtrace}"
               end
             end
+          end
+        end
+
+        private
+
+        def handle_post_motor_status(message, motor, follow_ups)
+          if message.state == :running || motor.state == :running ||
+             # if it's explicitly stopped, but we didn't ask it to, it's probably
+             # changing directions so keep querying
+             (message.state == :stopped &&
+               message.last_action_cause == :explicit_command &&
+               motor.last_action != Message::Stop && motor.last_action_retries.positive?)
+            if message.state == :stopped
+              SDN.logger.debug("Re-querying motor status for #{motor.addr} #{motor.last_action_retries} " \
+                               "more time(s) even though stopped")
+              motor.last_action_retries -= 1
+            end
+            follow_ups << Message::GetMotorStatus.new(message.src)
+          end
+          # this will do one more position request after it stopped
+          follow_ups << Message::GetMotorPosition.new(message.src)
+          motor.publish(:state, message.state)
+          motor.publish(:last_direction, message.last_direction)
+          motor.publish(:hass_state, motor_hass_state(message.state,
+                                                      message.last_direction,
+                                                      motor.position_percent))
+          motor.publish(:last_action_source, message.last_action_source)
+          motor.publish(:last_action_cause, message.last_action_cause)
+          motor.group_objects.each do |group|
+            states = group.motor_objects.map(&:state).uniq
+            state = (states.length == 1) ? states.first : "mixed"
+            group.publish(:state, state)
+
+            directions = group.motor_objects.map(&:last_direction).uniq
+            direction = (directions.length == 1) ? directions.first : "mixed"
+            group.publish(:last_direction, direction)
+
+            positions = group.motor_objects.map(&:position_percent).uniq
+            position = (positions.length == 1) ? positions.first : 50
+
+            group.publish(:hass_state, motor_hass_state(state, direction, position))
           end
         end
       end
