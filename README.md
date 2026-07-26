@@ -171,6 +171,59 @@ you'll probably be running the simulator on a Linux computer, and the Somfy
 software on a Windows computer, and you'll need to use com2com on the Windows
 side to create a virtual serial port of the network).
 
+### ESPHome Serial Proxy
+
+[ESPHome](https://esphome.io/) [serial proxies](https://esphome.io/components/serial_proxy/) are also supported.
+First, you can build an adapter with an ESP32 device and a MAX485 module:
+
+![Lolin ESP32-C3-Mini RS485 Adapter](doc/esp_adapter.jpg)
+
+DI on the MAX485 connects to your TX pin, DO to the RX pin, and DE to the flow control pin.
+RE should be connected to DE. VCC connects to +5V (VCC or VBUS on the ESP32), and GND to GND.
+Then flash an ESPHome device with a config similar to this:
+
+```yaml
+esphome:
+  name: patio-shade
+  friendly_name: Patio Shade
+
+esp32:
+  board: esp32-c3-devkitm-1
+  
+api:
+  encryption:
+    key: "a random key"
+
+ota:
+  - platform: esphome
+    password: "a random password"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    password: "a random password"
+
+captive_portal:
+
+uart:
+  - id: rs485
+    tx_pin: GPIO21
+    rx_pin: GPIO20
+    flow_control_pin: GPIO10
+    baud_rate: 4800
+    parity: ODD
+
+serial_proxy:
+  uart_id: rs485
+  name: SDN
+  port_type: RS485
+```
+
+You will also need to `gem install esphome` on the computer running the MQTT bridge.
+Then any place you would reference a serial port in the command line, you can use
+"esphome://:encryption_key@hostname".
+
 ## Motor Simulator
 
 *INCOMPLETE*. Run the simulator, and it will act like it's a motor. Useful

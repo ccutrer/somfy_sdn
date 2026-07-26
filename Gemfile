@@ -5,6 +5,7 @@ source "https://rubygems.org"
 gemspec
 
 gem "debug", "~> 1.9", require: false, platform: :mri
+gem "esphome", "~> 1.1", require: false
 gem "puma", "~> 7.2"
 gem "rackup", "~> 2.3"
 gem "rake", "~> 13.0"

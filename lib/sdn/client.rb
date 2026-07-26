@@ -31,6 +31,10 @@ module SDN
               io, slave = PTY.open
               puts "Slave PTY available at #{slave.path}"
               io
+            elsif uri.scheme == "esphome"
+              gem "esphome", "~> 1.1"
+              require "esphome/serial_proxy"
+              ESPHome::SerialProxy.open(uri, baud: 4800, data_bits: 8, parity: :odd, stop_bits: 1)
             else
               require "ccutrer-serialport"
               CCutrer::SerialPort.new(port, baud: 4800, data_bits: 8, parity: :odd, stop_bits: 1)
